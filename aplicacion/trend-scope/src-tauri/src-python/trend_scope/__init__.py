@@ -1,30 +1,34 @@
-import sys
+"""Desktop entry point and configuration commands exposed to Svelte."""
 
+from anyio import to_thread
 from anyio.from_thread import start_blocking_portal
-from pydantic import BaseModel
-from pytauri import (
-    Commands,
-    builder_factory,
-    context_factory,
+from pytauri import Commands, builder_factory, context_factory
+
+from .configuration import (
+    ConfigurationName,
+    ConfigurationSnapshot,
+    read_configuration,
+    write_configurations,
 )
 
 commands: Commands = Commands()
 
 
-class Person(BaseModel):
-    name: str
+@commands.command()
+async def load_configuration(body: ConfigurationName) -> str:
+    return await to_thread.run_sync(read_configuration, body.name)
 
 
 @commands.command()
-async def greet(body: Person) -> str:
-    return f"Hello, {body.name}! You've been greeted from Python {sys.version}!"
+async def save_configuration(body: ConfigurationSnapshot) -> bool:
+    await to_thread.run_sync(write_configurations, body)
+    return True
 
 
 def main() -> int:
-    with start_blocking_portal("asyncio") as portal:  # or `trio`
+    with start_blocking_portal("asyncio") as portal:
         app = builder_factory().build(
             context=context_factory(),
             invoke_handler=commands.generate_handler(portal),
         )
-        exit_code = app.run_return()
-        return exit_code
+        return app.run_return()

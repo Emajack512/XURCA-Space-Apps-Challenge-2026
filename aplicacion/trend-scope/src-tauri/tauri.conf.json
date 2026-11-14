@@ -13,9 +13,9 @@
   "app": {
     "windows": [
       {
-        "title": "trend-scope",
-        "width": 800,
-        "height": 600
+        "title": "Earth Detective",
+        "width": 1320,
+        "height": 840
       }
     ],
     "security": {

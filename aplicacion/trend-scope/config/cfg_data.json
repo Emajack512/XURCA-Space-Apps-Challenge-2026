@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "investigacion-demo",
+  "title": "Tendencias ambientales",
+  "objective": "",
+  "description": "",
+  "sources": [
+    {"id":"gldas-precipitation","provider":"NASA","dataset":"GLDAS","product":"GLDAS","version":null,"variable":"precipitation","unit":"mm/mes","processingUnit":"mm/mes","access":null,"reference":null}
+  ],
+  "time": {"start":"2000-01-01","end":"2025-12-31","resolution":"Mensual","aggregation":"Media"},
+  "geography": {
+    "referenceSystem":"WGS84",
+    "selection":{"type":"FeatureCollection","features":[]},
+    "aggregation":"Media de la región","interpolation":"Ninguna"
+  },
+  "processing":{"missing":"Excluir","quality":true,"normalization":"Ninguna","anomalies":false,"deseasonalize":false},
+  "methods":[{"id":"linear","parameters":{},"algorithmVersion":null,"resultId":"demo-trend"}],
+  "significance":0.05,
+  "confidence":0.95,
+  "uncertainty":{"method":null,"seed":null},
+  "provenance":{"simulated":true,"references":[]}
+}
