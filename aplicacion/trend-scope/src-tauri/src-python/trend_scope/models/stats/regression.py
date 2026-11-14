@@ -1,7 +1,6 @@
 import numpy as np
 from numba import njit
-from trend_scope.models.types import FitOutput
-
+from trend_scope.models.stats.schemas import FitOutput
 
 # =====================================================================
 # 1. NÚCLEO COMPILADO CON NUMBA (@njit)
