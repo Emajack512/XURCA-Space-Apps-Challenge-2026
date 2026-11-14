@@ -241,11 +241,15 @@ h2 { margin-top: 10px; font-size: clamp(2.2rem, 4.4vw, 4rem); line-height: 1.05;
   .earth { width: min(100%, 570px); }
   .resource-list { grid-template-columns: 1fr; }
 }
+@media (max-width: 480px) {
+  .nav-download { display: none; }
+  .nav-shell { grid-template-columns: 1fr auto; }
+  .menu-toggle { grid-area: 1 / 2; }
+}
 @media (max-width: 380px) {
   .shell, .nav-shell { width: calc(100% - 28px); }
   .brand { gap: 5px; font-size: 20px; }
   .brand img { width: 27px; height: 27px; }
-  .nav-download { font-size: .78rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; }
