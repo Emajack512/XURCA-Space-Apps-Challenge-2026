@@ -3,7 +3,7 @@
 import sys
 from multiprocessing import freeze_support
 
-from trend_scope import main
+from trend_scope.desktop import main
 
 # - If you don't use `multiprocessing`, you can remove this line.
 # - If you do use `multiprocessing` but without this line,
