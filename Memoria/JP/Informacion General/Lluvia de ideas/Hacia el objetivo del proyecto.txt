@@ -1,0 +1,10 @@
+Porque no diseñamos un sistema que permita utilizar las variables que la nasa provee. Pero que en vez de vos tener que ir seleccionar que variables, directamente se las pedis a una ia. Osea que sea una opcion esto, en vez de hacerlo manual. Supongo que acerca mas al usuario comun a esta informacion.
+Ejemplo: 
+Usuario:Quiero encontrar si hay relaciones entre el aumento de la temperatura de san juan y las actividades sismicas de la zona.
+Agente:okay, puedo ayudarte entregandote informacion acerca de la temperatura de san juan. Tenes de distintas fuentes:
+1- pepito1
+2- pepito2
+3...
+Yo te recomiendo la primera opcion
+Usuario: la primera es la fuente mas confiable? de donde proviene el resto de fuentes? si tenemos en cuenta tolerancias, cual es la mas confiable?
+agente:.....

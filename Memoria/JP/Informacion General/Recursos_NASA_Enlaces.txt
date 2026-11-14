@@ -1,0 +1,208 @@
+RECURSOS NASA Y AGENCIAS ESPACIALES — TÍTULO → URL
+Fuente: enlaces proporcionados en la conversación.
+
+=== TERRA Y OBSERVACIÓN TERRESTRE ===
+NASA Earthdata Worldview → https://www.earthdata.nasa.gov/worldview
+Global Imagery Browse Services → https://earthdata.nasa.gov/gibs
+NASA Earth Observatory → http://earthobservatory.nasa.gov/
+Terra Animations JPL Photojournal → https://photojournal.jpl.nasa.gov/keywords/animation?subselect=Mission%3ATerra%3A
+JPL ASTER Data Hub → https://asterweb.jpl.nasa.gov/data.asp
+POWER Project → https://www.earthdata.nasa.gov/news/feature-articles/power-earth-science-data
+POWER Data Access Viewer → https://power.larc.nasa.gov/data-access-viewer/
+Guide to Anaglyphs → https://earthobservatory.nasa.gov/blogs/earthmatters/2016/11/21/what-on-earth-is-an-anaglyph/
+NASA Earthdata Instrument Explorer → https://www.earthdata.nasa.gov/data/instruments
+FIRMS → https://firms.modaps.eosdis.nasa.gov/
+Landscape Toolbox → https://landscapetoolbox.org/
+Landscape Toolbox MISR → https://landscapetoolbox.org/remote-sensor-types/misr/
+Landscape Toolbox MODIS → https://landscapetoolbox.org/remote-sensor-types/modis/
+NASA Giovanni → https://giovanni.gsfc.nasa.gov/giovanni/
+MOPITT Plots → https://www2.acom.ucar.edu/facility/mopitt
+MISR Visualizations → https://misr.jpl.nasa.gov/#:~:text=Visualizations
+MISR MERLIN Information → https://misr.jpl.nasa.gov/news/merlin-new-tool-misr-plume-height-project-access-and-analysis/
+MERLIN Tool → https://l0dup05.larc.nasa.gov/merlin/merlin
+TESViS → https://www.earthdata.nasa.gov/data/tools/tesvis
+NASA Earthdata GIS → https://gis.earthdata.nasa.gov/
+CSA MOPITT Data Portal → https://donnees-data.asc-csa.gc.ca/en/dataset/ef42819f-35bb-49c0-a368-1e61fa876ee6
+JAXA ASTER Data Search → http://gbank.gsj.jp/madas/map/index.html
+INPE Catalogue → https://www.dgi.inpe.br/catalogo/explore
+
+=== EXOPLANETAS ===
+Kepler Objects of Interest → https://exoplanetarchive.ipac.caltech.edu/cgi-bin/TblView/nph-tblView?app=ExoTbls&config=cumulative
+TESS Objects of Interest → https://exoplanetarchive.ipac.caltech.edu/cgi-bin/TblView/nph-tblView?app=ExoTbls&config=TOI
+K2 Planets and Candidates → https://exoplanetarchive.ipac.caltech.edu/cgi-bin/TblView/nph-tblView?app=ExoTbls&config=k2pandc
+Exoplanet Detection Using Machine Learning → https://academic.oup.com/mnras/article/513/4/5505/6472249
+Ensemble Machine Learning for Exoplanet Identification → https://www.mdpi.com/2079-9292/13/19/3950
+NEOSSat Astronomy Data → https://donnees-data.asc-csa.gc.ca/en/dataset/9ae3e718-8b6d-40b7-8aa4-858f00e84b30
+NEOSSat Mission → https://www.asc-csa.gc.ca/eng/satellites/neossat/
+JWST CSA Information → https://www.asc-csa.gc.ca/eng/satellites/jwst/about.asp
+
+=== FLORACIONES ===
+Wildflower Bloom Observations → https://observer.globe.gov/do-globe-observer/do-more/data-requests/wildflower-blooms
+NASA Takes to the Air to Study Wildflowers → https://www.jpl.nasa.gov/news/nasa-takes-to-the-air-to-study-wildflowers/
+California Superblooms Example → https://www.sfgate.com/california-parks/article/california-superblooms-can-be-seen-from-space-17904572.php
+California Superbloom Images → https://go.nasa.gov/3FXWfsD
+Superbloom Seasons Comparison I → https://go.nasa.gov/414yKUp
+Superbloom Seasons Comparison II → https://go.nasa.gov/3mIRGsL
+Flower Spectra Research → https://esajournals.onlinelibrary.wiley.com/doi/10.1002/ecs2.70127
+GLOBE Webinar on Flowering Plants → https://youtu.be/n7XScIiXH-I?si=2CpS5h8dp9CX_X3p
+RCM Data Portal → https://donnees-data.asc-csa.gc.ca/en/dataset/64927856-8o0t-5u1o-987izna480aa45
+RADARSAT-1 Data → https://donnees-data.asc-csa.gc.ca/en/dataset/radarsat1
+
+=== BIOLOGÍA ESPACIAL ===
+Space Biology Publications (608) → https://github.com/jgalazka/SB_publications/tree/main
+NASA Open Science Data Repository → https://www.nasa.gov/osdr/
+NASA Space Life Sciences Library → https://public.ksc.nasa.gov/nslsl/
+NASA Task Book → https://taskbook.nasaprs.com/tbp/welcome.cfm
+
+=== ÓRBITA BAJA Y COMERCIALIZACIÓN ===
+NASA Orbital Debris Program Office → https://orbitaldebris.jsc.nasa.gov/
+NASA Open Data Portal → http://data.nasa.gov/
+USGS EarthExplorer → https://earthexplorer.usgs.gov/
+NASA Worldview Application → https://worldview.earthdata.nasa.gov/
+NASA Library Space Commercialization → https://www.nasa.gov/headquarters/library/find/bibliographies/space-commercialization/
+Canadian Space Industry Earth Observation → https://ised-isde.canada.ca/site/canadian-space-industry/en/earth-observation
+Copernicus Data Space Ecosystem → https://dataspace.copernicus.eu/
+
+=== CIUDADES SOSTENIBLES ===
+NASA SEDAC → https://search.earthdata.nasa.gov/search?q=CIESIN%20ESDIS
+Copernicus Global Human Settlement Layer → https://human-settlement.emergency.copernicus.eu/index.php
+Earth Observations Toolkit for Sustainable Cities → http://eotoolkit.unhabitat.org/
+WorldPop → https://www.worldpop.org/
+Copernicus Services Catalogue → https://www.copernicus.eu/en/accessing-data-where-and-how/copernicus-services-catalogue
+WRI Data Explorer → https://datasets.wri.org/?_gl=1*m4iypn*_gcl_au*MTg3NzYxODc5NC4xNzQxOTc0MTM5
+Brazil INDE → https://visualizador.inde.gov.br/
+
+=== PLANETA TIERRA Y OCÉANOS ===
+Earth.gov → https://earth.gov/
+Earth Information Center Visualizations → https://svs.gsfc.nasa.gov/gallery/earth-information-center/
+PACE and SWOT Visualizations → https://svs.gsfc.nasa.gov/5432/
+SWOT Vertical Gravity Gradient → https://svs.gsfc.nasa.gov/5519/
+EARTHDATA Ocean → https://www.earthdata.nasa.gov/topics/ocean
+SWOT CSA Data Portal → https://donnees-data.asc-csa.gc.ca/en/dataset/swot
+SWOT CSA Mission Information → https://www.asc-csa.gc.ca/eng/satellites/swot/
+CPTEC Weather and Climate → https://satelite.cptec.inpe.br/home/index.jsp
+
+=== EXPLORACIÓN PLANETARIA ===
+Mars Reconnaissance Orbiter Data → https://pds-imaging.jpl.nasa.gov/volumes/mro.html
+TESS Data Products → https://heasarc.gsfc.nasa.gov/docs/tess/data-products.html
+Lunar Data Portal → https://data.im-ldi.com/mds?MDS_SEARCH=%7B%22datasets%22%3A%5B%22luna_lroc_fi%22%2C%22luna_lroc_pds_nac_edrcdr%22%2C%22luna_lroc_pds_wac_edrcdr%22%2C%22luna_lroc_pds_rdr%22%5D%2C%22query%22%3A%7B%7D%2C%22map%22%3A%7B%7D%7D
+Solar System Treks → https://trek.nasa.gov/
+Earthdata Search → https://search.earthdata.nasa.gov/
+Lunar Reconnaissance Orbiter Data → https://science.nasa.gov/mission/lro/data-products/
+Canadian Wildland Fire Information System → https://cwfis.cfs.nrcan.gc.ca/home
+GEO.ca → http://geo.ca/
+SCISAT ACE → https://donnees-data.asc-csa.gc.ca/en/dataset/02969436-8c0b-4e6e-ad40-781cdb43cf24
+OSIRIS → https://donnees-data.asc-csa.gc.ca/en/dataset/6c3f7e9c-7b43-4a6b-a924-a1bef1a9cf74
+
+=== CALIDAD DEL AIRE Y METEOROLOGÍA ===
+WHO Air Pollution → https://www.who.int/health-topics/air-pollution#tab=tab_1
+60 Second Science Air Quality → https://youtu.be/FsR2iylJlLE?si=CzRGgv-1VzA7JVkl
+NASA Air Pollution Webinar → https://appliedsciences.nasa.gov/get-involved/training/english/arset-inside-look-how-nasa-measures-air-pollution
+TEMPO Data → https://www.earthdata.nasa.gov/data/instruments/tempo
+SPoRt Viewer → https://weather.ndc.nasa.gov/sport/viewer/?dataset=tempol2&product=tempo_no2&location=for
+ASDC Resource Hub → https://github.com/nasa/ASDC_Data_and_User_Services/tree/main
+ASDC → https://asdc.larc.nasa.gov/
+ASDC Tutorials → https://nasa.github.io/ASDC_Data_and_User_Services/
+EPA RSIG → https://www.epa.gov/hesc/remote-sensing-information-gateway
+RSIG Python Notebook → https://github.com/nasa/ASDC_Data_and_User_Services/blob/main/TEMPO/tempo_geoxo_meeting_haqast.ipynb
+TMPA Precipitation → https://search.earthdata.nasa.gov/search?q=TMPA
+IMERG Precipitation → https://search.earthdata.nasa.gov/search?q=IMERG
+IMERG Resources → https://gpm.nasa.gov/gpm/imerg-global-image
+Daymet → https://daymet.ornl.gov/getdata
+Cloud Observations → https://satcorps.larc.nasa.gov/
+GOES Himawari Red Visible → https://go.nasa.gov/3fyrCrQ
+GOES Himawari Clean Infrared → https://go.nasa.gov/2SPe4Pf
+AIRS Relative Humidity → https://search.earthdata.nasa.gov/search/granules?p=C1701805625-GES_DISC&pg%5B0%5D%5Bv%5D=f&pg%5B0%5D%5Bgsk%5D=-start_date&q=relative%20humidity&fl=2%2B-%2BGeophys.%2BVariables%252C%2BSensor%2BCoordinates&lf=1%2Bto%2B3%2Bhours&csk=-score&tl=1388441027.485!5!!&fst0=Atmosphere&fpc0=Earth+Observation+Satellites&fpb0=Space-based+Platforms
+MERRA-2 Humidity and Temperature → https://search.earthdata.nasa.gov/search?q=merra-2&fs10=Surface%20Temperature&fsm0=Atmospheric%20Temperature&fs20=Air%20Temperature&fst0=Atmosphere
+AIRS Surface Air Temperature → https://go.nasa.gov/3vNB1WD
+CYGNSS DDMI Wind → https://search.earthdata.nasa.gov/search/granules/collection-details?p=C2254232941-POCLOUD&pg%5B0%5D%5Bv%5D=f&pg%5B0%5D%5Bgsk%5D=-start_date&q=wind%20ddmi&fi=DDMI&fpj=CYGNSS&fl=2%2B-%2BGeophys.%2BVariables%252C%2BSensor%2BCoordinates&fs10=Surface+Winds&fsm0=Ocean+Winds&fst0=Oceans&fst1=Land+Surface&fpb0=Space-based+Platforms
+Other CYGNSS Products → https://search.earthdata.nasa.gov/search?p=C2254232941-POCLOUD&pg%5B0%5D%5Bv%5D=f&pg%5B0%5D%5Bgsk%5D=-start_date&q=wind%20ddmi&fi=DDMI&fpj=CYGNSS&fl=2%2B-%2BGeophys.%2BVariables%252C%2BSensor%2BCoordinates&fs10=Surface%20Winds&fsm0=Ocean%20Winds&fst0=Oceans&fst1=Land%20Surface&fpb0=Space-based%20Platforms
+AMSR2 Wind → https://search.earthdata.nasa.gov/search/granules?p=C1841273046-LANCEAMSR2&pg%5b0%5d%5bv%5d=f&pg%5b0%5d%5bgsk%5d=-start_date&fi=AMSR2&tl=1672484219.217!4!!&fs10=Surface%20Winds&fsm0=Atmospheric%20Winds&fs20=Wind%20Direction&fst0=Atmosphere&fs21=Wind%20Speed&fs11=Surface%20Winds&fsm1=Atmospheric%20Winds&fst1=Atmosphere
+NASA LANCE → https://www.earthdata.nasa.gov/learn/find-data/near-real-time
+MERRA-2 Wind → https://search.earthdata.nasa.gov/search?q=M2IMNPASM
+MERRA-2 PBL Monthly → https://search.earthdata.nasa.gov/search?q=M2TMNXFLX
+MERRA-2 PBL Hourly → https://search.earthdata.nasa.gov/search/granules?p=C1276812838-GES_DISC&pg%5b0%5d%5bv%5d=f&pg%5b0%5d%5bgsk%5d=-start_date&fdc=Goddard%2BEarth%2BSciences%2BData%2Band%2BInformation%2BServices%2BCenter%2B%2528GES%2BDISC%2529&fl=4%2B-%2BGridded%2BModel%2BOutput&as%5bscience_keywords%5d%5b0%5d=Atmosphere%3AAltitude%3APlanetary%20Boundary%20Layer%20Height&csk=-ongoing&tl=1030998600.714!5!!&fs10=Planetary%20Boundary%20Layer%20Height&fsm0=Altitude&fst0=Atmosphere
+NASA Pandora → https://pandora.gsfc.nasa.gov/
+Pandonia Global Network → https://www.pandonia-global-network.org/
+Pandonia Data → http://data.pandonia-global-network.org/
+TOLNet → https://tolnet.larc.nasa.gov/
+TOLNet Data → https://tolnet.larc.nasa.gov/download
+AirNow → https://www.airnow.gov/
+OpenAQ → https://openaq.org/
+OpenAQ Data → https://explore.openaq.org/
+Earthdata Login → https://urs.earthdata.nasa.gov/
+Earthdata Login Video → https://www.youtube.com/watch?v=8Ji1XfKZ78c
+Earthdata Login Tips → https://go.nasa.gov/44HooLE?utm_source=ESDS&utm_medium=presentation&utm_campaign=outreach
+Earthaccess Python → https://github.com/nsidc/earthaccess?utm_source=ESDS&utm_medium=presentation&utm_campaign=outreach
+VirtualiZarr Tutorial → https://earthaccess.readthedocs.io/en/stable/tutorials/virtual_dataset_tutorial_with_TEMPO_Level3/
+Xarray → https://docs.xarray.dev/en/stable/
+NASA Earthdata Cloud Cookbook → https://nasa-openscapes.github.io/earthdata-cloud-cookbook/?utm_source=ESDS&utm_medium=presentation&utm_campaign=outreach
+OPeNDAP → https://opendap.earthdata.nasa.gov/?utm_source=ESDS&utm_medium=presentation&utm_campaign=outreach
+Earthdata Harmony → https://harmony.earthdata.nasa.gov/
+Harmony Python Client → https://github.com/nasa/harmony-py
+Harmony API Notebook → https://github.com/nasa/harmony/blob/main/docs/Harmony%20API%20introduction.ipynb
+Earthdata Developer Portal → https://www.earthdata.nasa.gov/collaborate/open-data-services-and-software/api?utm_source=ESDS&utm_medium=presentation&utm_campaign=outreach
+GIBS API → https://www.earthdata.nasa.gov/engage/open-data-services-software/earthdata-developer-portal/gibs-api
+Python GIBS Tutorial → https://www.earthdata.nasa.gov/news/blog/use-python-access-gibs-api
+AppEEARS → https://appeears.earthdatacloud.nasa.gov/
+AppEEARS Help → https://appeears.earthdatacloud.nasa.gov/help
+AppEEARS API → https://appeears.earthdatacloud.nasa.gov/api/
+AppEEARS Data Resources → https://github.com/nasa/AppEEARS-Data-Resources
+Brazil SEEG → https://seeg.eco.br/#emissoes
+CPTEC Environmental Data → http://meioambiente.cptec.inpe.br/
+
+=== ESTACIÓN ESPACIAL Y ACTIVIDADES EXTRAVEHICULARES ===
+NASA Image and Video Library → https://images.nasa.gov/
+NASA JSC Flickr → https://www.flickr.com/photos/nasa2explore/albums/
+ISS Research and Technology → https://www.nasa.gov/international-space-station/space-station-research-and-technology/
+ISS Coordinates Data → https://data.nasa.gov/dataset/?q=ISS+Coords&sort=score+desc%2C+metadata_modified+desc
+Neutral Buoyancy Laboratory → https://www.nasa.gov/johnson/neutral-buoyancy-laboratory/
+EVA Systems → https://www.nasa.gov/reference/jsc-eva-systems/
+EVA and Environmental Physiology → https://www.nasa.gov/directorates/esdmd/hhp/space-suits-and-exploration-operations/
+
+=== ASTEROIDES Y DEFENSA PLANETARIA ===
+NASA NEO API → https://api.nasa.gov/
+USGS Earthquake Catalog → https://earthquake.usgs.gov/earthquakes/search/
+USGS Event Terms → https://earthquake.usgs.gov/data/comcat/#event-terms
+USGS National Map → https://www.usgs.gov/programs/national-geospatial-program/national-map
+USGS National Map Training → https://www.usgs.gov/programs/national-geospatial-program/national-map-training
+Approximate Positions of the Planets → https://ssd.jpl.nasa.gov/planets/approx_pos.html
+Small-Body Database Query → https://ssd.jpl.nasa.gov/tools/sbdb_query.html
+Small-Body Database Tools → https://ssd.jpl.nasa.gov/tools/
+Near-Earth Comets API → https://data.nasa.gov/dataset/near-earth-comets-orbital-elements-api
+Elliptical Orbit Simulator → https://nasa.github.io/mission-viz/RMarkdown/Elliptical_Orbit_Design.html
+Eyes on Asteroids → https://eyes.nasa.gov/apps/asteroids/
+
+=== AGRICULTURA ===
+Agriculture and Water Management Pathfinder → https://www.earthdata.nasa.gov/learn/pathfinders/agricultural-and-water-resources-data-pathfinder
+Floods Data Pathfinder → https://www.earthdata.nasa.gov/learn/pathfinders/disasters/floods-data-pathfinder
+Extreme Heat Data Pathfinder → https://www.earthdata.nasa.gov/topics/human-dimensions/heat
+NASA Acres → https://www.nasaacres.org/
+NASA Harvest → https://www.nasaharvest.org/
+NASA Harvest Portal → https://www.harvestportal.org/
+AppEEARS Products → https://appeears.earthdatacloud.nasa.gov/products
+Giovanni User Manual → https://giovanni.gsfc.nasa.gov/giovanni/doc/UsersManualworkingdocument.docx.html
+Global Agriculture Monitoring System → https://glam1.gsfc.nasa.gov/
+VEDA Dashboard → https://www.earthdata.nasa.gov/dashboard/
+U.S. Drought Monitor → https://droughtmonitor.unl.edu/
+Crop-CASMA → https://nassgeo.csiss.gmu.edu/CropCASMA/
+Earthdata Forum → https://forum.earthdata.nasa.gov/
+NASA Earth Science Backgrounders → https://www.earthdata.nasa.gov/learn/backgrounders
+ARSET Agriculture Training → https://appliedsciences.nasa.gov/what-we-do/capacity-building/arset/arset-agriculture-trainings
+Earth Observatory Agriculture → https://earthobservatory.nasa.gov/search?q=agriculture
+FAIR Principles → https://www.nlm.nih.gov/oet/ed/cde/tutorial/02-200.html
+CARE Principles → https://doi.org/10.5334/dsj-2020-043
+GFSAD Croplands → https://croplands.org/app/map
+Agriculture in the Satellite Age → https://www.asc-csa.gc.ca/eng/satellites/everyday-lives/agriculture-in-the-satellite-age.asp
+CONAE Spectral Signature Library → https://catalogos5.conae.gov.ar/FirmasEspectrales/default.aspx
+CONAE GEOServicios → https://catalogos.conae.gov.ar/catalogo/catalogoGeoServiciosOGC.html#temas
+CONAE SAOCOM Catalogue → https://catalogos.conae.gov.ar/catalogo/catalogoSaocom.html
+
+=== OCÉANOS Y VIDA MARINA ===
+PACE → https://pace.gsfc.nasa.gov/
+MODIS Aqua → https://modis.gsfc.nasa.gov/data/
+SWOT PO.DAAC → https://podaac.jpl.nasa.gov/SWOT
+Sharks and Mesoscale Eddies PNAS → https://www.pnas.org/doi/abs/10.1073/pnas.1903067116
+White Sharks and Mesoscale Eddies Nature → https://www.nature.com/articles/s41598-018-25565-8
+CSA smartWhales → https://www.asc-csa.gc.ca/eng/blog/2024/06/04/smartwhales-using-space-to-keep-whales-safe.asp
+CSA Monitoring Ecosystems → https://www.asc-csa.gc.ca/eng/satellites/everyday-lives/monitoring-and-protecting-our-ecosystems-from-space.asp
