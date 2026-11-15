@@ -8,7 +8,7 @@ wet-day threshold is an explicit argument (the standard value is 1 mm).
 """
 import numpy as np
 
-from ..numeric import array, finite, integer, scalar
+from ..numeric import array, finite, integer, scalar, temporal
 
 VERSION = '1.0.0-candidate'
 
@@ -118,3 +118,50 @@ def warm_spell_days(values, thresholds, groups, *, min_duration) -> dict:
                     output[position] += run
                 run = 0
     return _result(ids, output)
+
+
+def analyze_etccdi(method, data, request):
+    """Registry adapter for rx1day, rx5day, sdii, cdd and r95ptot (one method each).
+
+    `groups` is a dataset variable ID (unit 1) holding the calendar year of each
+    day; r95ptot also takes `baseline` (0/1). The series must be regular daily
+    precipitation depth with complete years: the caller (handler) keeps only
+    complete years. `wet_threshold` is required by sdii, cdd and r95ptot.
+    """
+    from ..contracts import AnalysisResult
+    from .events import _auxiliary
+
+    variable = data.variables[request.variable]
+    if data.time is None or (variable.invalid is not None and variable.invalid.any()):
+        raise ValueError('Explicit time coordinates and unmasked observations are required')
+    t, y = temporal(data.time.values, variable.values, regular=True, minimum=365)
+    parameters = dict(request.parameters)
+    names = ('groups', 'baseline') if method == 'r95ptot' else ('groups',)
+    selected = _auxiliary(data, parameters, names)
+    groups = selected['groups']
+    if method in ('sdii', 'cdd', 'r95ptot') and 'wet_threshold' not in parameters:
+        raise ValueError('Specify wet_threshold explicitly')
+    if method == 'rx1day':
+        payload = rx1day(y, groups)
+    elif method == 'rx5day':
+        payload = rx5day(y, groups)
+    elif method == 'sdii':
+        payload = sdii(y, groups, wet_threshold=parameters['wet_threshold'])
+    elif method == 'cdd':
+        payload = cdd(y, groups, wet_threshold=parameters['wet_threshold'])
+    else:
+        if not np.isin(selected['baseline'], [0, 1]).all():
+            raise ValueError('baseline variable must encode False/True as 0/1')
+        extra = {'percentile': parameters['percentile']} if 'percentile' in parameters else {}
+        payload = r95ptot(y, groups, selected['baseline'].astype(bool),
+                          wet_threshold=parameters['wet_threshold'], **extra)
+    unit = 'days' if method == 'cdd' else variable.unit
+    units = {'group_ids': '1', 'values': unit, 'valid': '1'}
+    if method == 'r95ptot':
+        units.update(threshold=variable.unit, n_reference_wet_days='1')
+    return AnalysisResult(
+        request.analysis_id, method, VERSION, data.dataset_id, request.variable, 'completed', 'index',
+        dict(request.parameters), payload, units, tuple(payload['warnings']), data.provenance,
+        {'n_observations': len(t), 'time_start': t[0], 'time_end': t[-1], 'time_origin': data.time.origin,
+         'time_unit': data.time.unit, 'calendar': data.time.calendar, 'value_unit': variable.unit,
+         'quality': data.quality}, data.transformations, uncertainty=payload['uncertainty'])

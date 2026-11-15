@@ -30,9 +30,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 }
 .app-shell button.outlined{border-color:var(--line);background:var(--surface)}
 .app-shell button.icon-button{padding:4px;min-width:26px;min-height:26px}
-input:not([type=checkbox]),select,textarea{width:100%;min-width:0;border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:7px;padding:6px 8px}
+input:not([type=checkbox]):not([type=radio]),select,textarea{width:100%;min-width:0;border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:7px;padding:6px 8px}
 input[type=range]{accent-color:var(--accent)}
-input[type=checkbox]{accent-color:var(--accent);margin:0}
+input[type=checkbox],input[type=radio]{accent-color:var(--accent);margin:0}
 input[type=color]{max-width:42px;height:30px;padding:3px}
 textarea{resize:vertical}
 small,.quiet{color:var(--muted)}
@@ -211,3 +211,22 @@ dialog p[role=alert]{color:var(--warning)}
   .workspace-view .settings-panel,.workspace-view .assistant-panel{height:360px}
   .workspace-view .map-panel{height:300px}
 }
+.analysis-panel .results-scroll{padding:10px 14px}
+.analysis-form{display:grid;gap:10px;max-width:760px}
+.analysis-form label,.analysis-form fieldset{display:grid;gap:4px;color:var(--muted);font-size:.88em}
+.analysis-form fieldset{border:1px solid var(--line);border-radius:6px;padding:8px 10px;margin:0}
+.analysis-form label.check{display:flex;align-items:center;gap:8px;color:var(--text)}
+.analysis-params{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}
+.analysis-form details summary{cursor:pointer;color:var(--muted)}
+.analysis-error{color:var(--warning)}
+.analysis-output{margin-top:14px;max-width:900px}
+.analysis-output .finding{padding:8px 0;border-top:1px solid #28394e}
+.analysis-output .finding p{margin:2px 0}
+.verdict{border-left:3px solid var(--faint);padding:4px 10px;margin:8px 0}
+.verdict.supported{border-color:#4fd18b}.verdict.not_supported{border-color:#e0766a}.verdict.inconclusive{border-color:var(--warning)}
+.verdict p{margin:2px 0}
+.forecast-table{width:100%;border-collapse:collapse;margin:8px 0;font-size:.88em}
+.forecast-table th,.forecast-table td{text-align:right;padding:3px 8px;border-bottom:1px solid #28394e}
+.forecast-table th:first-child,.forecast-table td:first-child{text-align:left}
+.chart-workspace .chart-canvas.forecast-canvas,.forecast-canvas{height:260px}
+.app-shell.light .analysis-output .finding,.app-shell.light .forecast-table th,.app-shell.light .forecast-table td{border-color:var(--line)}

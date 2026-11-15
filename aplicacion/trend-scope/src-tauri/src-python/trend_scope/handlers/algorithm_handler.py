@@ -97,6 +97,9 @@ def _condition(name: str, profile: dict, prepared, params: dict, available: set)
     if name == "pairs_ok":
         ok = n * (n - 1) // 2 <= PAIR_BUDGET
         return ok, "" if ok else f"n={n} excede el presupuesto de {PAIR_BUDGET} pares; agregá a una cadencia menor"
+    if name == "has_controls":
+        ok = bool(prepared.meta.get("controls"))
+        return ok, "hay variables de control" if ok else "no se indicaron variables de control"
     if name.startswith("param:"):
         key, _, wanted = name[6:].partition("=")
         ok = str(params.get(key)) == wanted
@@ -110,6 +113,8 @@ def _resolve_token(value, prepared, params: dict, extra: dict):
             return prepared.meta["groups"]
         if value == "@scale":
             return extra["scale"]
+        if value == "@controls":
+            return list(prepared.meta["controls"])
         if value.startswith("$"):
             key = value[1:]
             for source in (extra, prepared.derived, params):

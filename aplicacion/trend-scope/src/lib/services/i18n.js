@@ -279,7 +279,20 @@ const english = {
   "La fecha inicial debe ser anterior o igual a la final.": "The start date must be on or before the end date.",
   "Esta consulta admite resolución mensual.": "This query supports monthly resolution.",
   "No se pudo conectar con NASA POWER. Probá de nuevo.": "Could not connect to NASA POWER. Try again.",
-  "Abrí Earth Detective con pnpm tauri dev para consultar las fuentes.": "Open Earth Detective with pnpm tauri dev to fetch data."
+  "Abrí Earth Detective con pnpm tauri dev para consultar las fuentes.": "Open Earth Detective with pnpm tauri dev to fetch data.",
+  "Análisis estadístico": "Statistical analysis",
+  "Análisis estadístico…": "Statistical analysis…",
+  "Analizar": "Analyze",
+  "Analizando…": "Analyzing…",
+  "Cargando análisis…": "Loading analyses…",
+  "Hipótesis (opcional)": "Hypothesis (optional)",
+  "Sin hipótesis": "No hypothesis",
+  "Limitaciones": "Limitations",
+  "Avisos": "Warnings",
+  "Cómo se calculó": "How it was computed",
+  "Preparación de los datos": "Data preparation",
+  "Estado": "Status",
+  "La configuración cambió después de este análisis. Volvé a ejecutarlo para actualizarlo.": "The settings changed after this analysis. Run it again to update it."
 };
 
 const language = derived(workspace, ({ visual }) => visual.language);

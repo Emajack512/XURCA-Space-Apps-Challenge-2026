@@ -9,6 +9,7 @@
   import Globe from '$lib/components/Globe.svelte';
   import SettingsPanel from '$lib/components/Settings.svelte';
   import Results from '$lib/components/Results.svelte';
+  import AnalysisPanel from '$lib/components/AnalysisPanel.svelte';
   import Assistant from '$lib/components/Assistant.svelte';
   import ResizeHandle from '$lib/components/ResizeHandle.svelte';
   import { workspace, defaults, editData, editVisual, selectGeometry } from '$lib/stores/workspace.js';
@@ -38,6 +39,7 @@
   let acquisitionError = $state(null);
   let result = $state(null);
   let chartId = $state(null);
+  let analysisView = $state(false);
   let savedConfig = $state('');
   let storageBusy = $state(true);
   let panels = $derived($workspace.visual.workspace);
@@ -45,6 +47,7 @@
   let assistantVisible = $derived(panels.assistantVisible !== false);
   let currentSeries = $derived(result?.key === configKey ? result.series : []);
   let activeChart = $derived(currentSeries.find(item => item.id === chartId));
+  let analysisVisible = $derived(analysisView && !activeChart);
   let exportableSeries = $derived(currentSeries.filter(item => item.points.some(point => point.value !== null)));
   let exportId = $state('');
   let exporting = $state(false);
@@ -72,11 +75,13 @@
   function notify(text) { notice = text; }
   function togglePanel(id, value = panels[id] === false) {
     chartId = null;
+    analysisView = false;
     editVisual(visual => visual.workspace[id] = value);
     if (id === 'map' && !value) cursor = null;
   }
 
   function toggleCharts() {
+    analysisView = false;
     chartId = activeChart ? null : currentSeries[0]?.id ?? null;
   }
 
@@ -112,15 +117,22 @@
   }
   function chooseTool(id) { tool = id; vertices = []; if (notice === openPolygonNotice) notice = ''; }
   function clearSelection() { vertices = []; if (notice === openPolygonNotice) notice = ''; editData(data => data.geography.selection.features = []); }
-  async function run({ showChart = true } = {}) {
-    if (running || storageBusy) return;
-    let investigation;
+  function buildInvestigation() {
     try {
-      investigation = prepareInvestigation($workspace.data);
+      return prepareInvestigation($workspace.data);
     } catch (error) {
       notify($translate(error.message));
-      return;
+      return null;
     }
+  }
+
+  function openAnalysis() { chartId = null; analysisView = true; }
+
+  async function run({ showChart = true } = {}) {
+    if (running || storageBusy) return;
+    const investigation = buildInvestigation();
+    if (!investigation) return;
+    analysisView = false;
     const startedWith = configKey;
     running = true;
     acquisitionError = null;
@@ -243,7 +255,7 @@
   const menus = [
     ['Proyecto', [['Guardar configuración',save],['Recuperar configuración',() => dirty ? showDialog('restore') : restore()]]],
     ['Datos', [['Ingresar coordenadas',() => openCoordinates()]]],
-    ['Análisis', [['Procesar',run],['Mostrar resultados',() => chartId = currentSeries[0]?.id ?? null]]],
+    ['Análisis', [['Procesar',run],['Mostrar resultados',() => chartId = currentSeries[0]?.id ?? null],['Análisis estadístico…',openAnalysis]]],
     ['Visualización', [['Resolución gráfica',() => showDialog('chart-resolution')],['Alternar asistente',() => togglePanel('assistantVisible', !assistantVisible)]]],
     ['Capas', [
       ['Alternar fronteras', () => editVisual(visual => visual.map.layers.countries = !visual.map.layers.countries)],
@@ -290,12 +302,13 @@
       <button class="tool-button" class:active={mapVisible} aria-pressed={mapVisible}
         title={$translate('Alternar mapa')} aria-label={$translate('Alternar mapa')}
         onclick={() => togglePanel('map', !mapVisible)}><Earth size={17}/></button>
-      <button class="tool-button" class:active={settingsOpen} aria-pressed={settingsOpen} title={$translate("Configuración")} aria-label={$translate("Alternar panel de configuración")} onclick={() => { chartId = null; settingsOpen = !settingsOpen; }}><Settings size={17}/></button>
+      <button class="tool-button" class:active={settingsOpen} aria-pressed={settingsOpen} title={$translate("Configuración")} aria-label={$translate("Alternar panel de configuración")} onclick={() => { chartId = null; analysisView = false; settingsOpen = !settingsOpen; }}><Settings size={17}/></button>
       <button class="tool-button" class:active={!!activeChart} aria-pressed={!!activeChart} disabled={!currentSeries.length} title={$translate("Gráficas")} aria-label={$translate("Alternar gráficas")} onclick={toggleCharts}><ChartNoAxesCombined size={17}/></button>
       <button class="tool-button" class:active={assistantVisible} aria-pressed={assistantVisible} title={$translate("Asistente de IA")} aria-label={$translate("Alternar asistente")} onclick={() => togglePanel('assistantVisible', !assistantVisible)}><Bot size={17}/></button>
     </div>
     <div class="view-tabs" role="group" aria-label={$translate('Vistas de la consulta')}>
-      <button class:active={!activeChart} aria-pressed={!activeChart} onclick={() => chartId = null}>{$translate('Espacio de trabajo')}</button>
+      <button class:active={!activeChart && !analysisVisible} aria-pressed={!activeChart && !analysisVisible} onclick={() => { chartId = null; analysisView = false; }}>{$translate('Espacio de trabajo')}</button>
+      <button class:active={analysisVisible} aria-pressed={analysisVisible} onclick={openAnalysis}>{$translate('Análisis estadístico')}</button>
       {#each currentSeries as item (item.id)}
         {@const label = $translate(catalog.find(source => source.id === item.id.split('::')[0])?.label ?? item.label ?? item.variable)}
         <button class:active={activeChart?.id === item.id} aria-pressed={activeChart?.id === item.id} title={item.placeLabel ? item.placeLabel + ' · ' + label : label} onclick={() => chartId = item.id}><span>{item.placeLabel ?? label}{item.placeLabel && currentSeries.some(other => other.id !== item.id && other.placeLabel === item.placeLabel) ? ' · ' + label : ''}</span></button>
@@ -307,7 +320,7 @@
   </div>
 
   <main class="view-content">
-  <div class="desktop workspace-view" hidden={!!activeChart}
+  <div class="desktop workspace-view" hidden={!!activeChart || analysisVisible}
     style:--settings-width={panels.settingsWidth + 'px'} style:--assistant-width={(panels.assistantWidth ?? 330) + 'px'}>
     {#if settingsOpen}
       <SettingsPanel {openCoordinates}/>
@@ -321,13 +334,16 @@
     {#if assistantVisible && mapVisible}<ResizeHandle label={$translate('Ancho del asistente')} value={panels.assistantWidth ?? 388} min={265} max={600} direction={-1} resize={value => editVisual(visual => visual.workspace.assistantWidth = value)}/>{/if}
     <aside class="assistant-panel" hidden={!assistantVisible}>
       <header class="panel-heading"><span><Bot size={16}/> {$translate('Asistente de IA')}</span></header>
-      <Assistant series={currentSeries} {running} {storageBusy}
+      <Assistant series={currentSeries} {running} {storageBusy} {buildInvestigation}
         acquisitionError={acquisitionError?.key === configKey ? acquisitionError.message : ''}
-        onprocess={() => run({ showChart: false })} onresults={() => chartId = currentSeries[0]?.id ?? null}/>
+        onprocess={() => run({ showChart: false })} onresults={() => chartId = currentSeries[0]?.id ?? null}
+        onanalysis={openAnalysis}/>
     </aside>
   </div>
   {#if activeChart}
     <div class="chart-workspace"><Results series={[activeChart]}/></div>
+  {:else if analysisVisible}
+    <div class="chart-workspace"><AnalysisPanel {buildInvestigation} {notify}/></div>
   {/if}
   </main>
 

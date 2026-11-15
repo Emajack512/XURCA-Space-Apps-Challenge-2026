@@ -2,14 +2,17 @@
 
 import json
 from datetime import date
+from functools import lru_cache
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 from jsonschema import Draft202012Validator, ValidationError as SchemaError
 
 from .gemini import CONTRACT, post_json
 
 WORKER_URL = "https://gemini-tauri-api.bilbaojuani.workers.dev"
+PROMPT_LIMIT = 29_500   # the deployed worker accepts at most 30,000 characters per prompt
+PREPARATION_PARAMS = {"aggregate", "min_coverage", "gap_policy"}
 
 
 class AssistantQuestion(BaseModel):
@@ -17,6 +20,43 @@ class AssistantQuestion(BaseModel):
     language: Literal["es", "en"] = "es"
     feedback: str = Field(default="", max_length=700)
     context: str = Field(default="", max_length=18000)
+
+
+@lru_cache(maxsize=1)
+def analysis_catalog() -> list:
+    """Compact catalogue of the available analyses for the model (built from the handlers; empty if unavailable)."""
+    try:
+        from ..handlers.analysis_handler import capabilities
+        items = []
+        for entry in capabilities()["analyses"]:
+            if not entry["available"]:
+                continue
+            params = {}
+            for name, spec in entry["params"].items():
+                if name in PREPARATION_PARAMS:
+                    continue
+                text = spec["type"] + ("[" + "|".join(spec["choices"]) + "]" if spec["choices"] else "")
+                params[name] = text + (" REQUIRED" if spec["required"] else "")
+            items.append({"id": entry["struct_id"], "title": entry["title"],
+                          "variables": [entry["targets"]["min"], entry["targets"]["max"]],
+                          "params": params, "hypotheses": entry["hypotheses"]})
+        return items
+    except Exception:  # the chat keeps working without analyses
+        return []
+
+
+def check_analysis(item: dict) -> None:
+    """Dry-run the handlers' own validation of a proposed analysis (struct, targets, parameters, hypothesis)."""
+    from ..handlers.analysis_handler import resolve
+    from ..handlers.contracts import AnalysisSpec, HandlerError
+    try:
+        resolve(AnalysisSpec(id="proposal", struct=item["struct"], targets=item["targets"],
+                             params=item.get("params") or {}, hypothesis=item.get("hypothesis")))
+    except HandlerError as error:
+        raise ValueError(f"La IA devolvió una propuesta inválida (análisis): {error.message}") from None
+    except ValidationError as error:
+        raise ValueError("La IA devolvió una propuesta inválida (análisis): " + "; ".join(
+            f"{'.'.join(str(part) for part in detail['loc'])}: {detail['msg']}" for detail in error.errors()[:3])) from None
 
 
 def validate_proposal(proposal):
@@ -42,6 +82,9 @@ def validate_proposal(proposal):
         json.dumps(proposal, allow_nan=False)
     except (SchemaError, ValueError, TypeError, KeyError):
         raise ValueError("La IA devolvió una propuesta inválida. No se aplicaron cambios; reformulá el pedido.") from None
+    analysis = proposal["changes"].get("analysis")
+    if analysis is not None:
+        check_analysis(analysis)
     return proposal
 
 
@@ -52,6 +95,7 @@ def interpret(body: AssistantQuestion) -> dict:
     request = {
         "question": question, "language": body.language,
         "context": body.context, "previous_attempt_feedback": body.feedback,
+        "analysisCatalog": analysis_catalog(),
     }
     prompt = (
         CONTRACT["instruction"]
@@ -59,6 +103,8 @@ def interpret(body: AssistantQuestion) -> dict:
         + "\nSchema: " + json.dumps(CONTRACT["schema"], separators=(",", ":"))
         + "\nRequest data: " + json.dumps(request, ensure_ascii=False, separators=(",", ":"))
     )
+    if len(prompt) > PROMPT_LIMIT:
+        raise ValueError("La consulta es demasiado grande para el asistente. Reducí las variables o la conversación.")
     answer = post_json(WORKER_URL, {"prompt": prompt}, {"User-Agent": "EarthDetective/1.0"}).get("answer")
     try:
         if not isinstance(answer, str):

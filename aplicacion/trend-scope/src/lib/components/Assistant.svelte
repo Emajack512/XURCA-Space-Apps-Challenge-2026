@@ -7,6 +7,8 @@
   import { assistantCatalog as catalog } from '$lib/services/sources.js';
   import { providerGeometries } from '$lib/services/sources.js';
   import { configureWorkspace } from '$lib/services/assistantConfiguration.js';
+  import { executeAnalysis } from '$lib/services/analysisRunner.js';
+  import { analysisRun } from '$lib/stores/analysis.js';
   import { prepareInvestigation } from '$lib/services/acquisition.js';
   import idleMascot from '$lib/assets/mascot/reposo.png';
   import thinkingMascot from '$lib/assets/mascot/pensando.png';
@@ -16,7 +18,10 @@
   import restingMascot from '$lib/assets/mascot/descansando.png';
 
   let { series = [], running = false, storageBusy = false, acquisitionError = '',
-    onprocess = () => {}, onresults = () => {} } = $props();
+    onprocess = () => {}, onresults = () => {}, buildInvestigation = () => null, onanalysis = () => {} } = $props();
+  const CONTEXT_LIMIT = 14000; // Leave room for the schema, instructions and analysis catalogue.
+  let executing = $state(false);
+  let digestFresh = $derived($analysisRun !== null && $analysisRun.key === JSON.stringify($workspace.data));
   let failedQuestion = $state('');
   let recovering = $state(false);
 
@@ -26,12 +31,13 @@
   let configured = $state(false);
   let thread;
   const tr = (es, en) => $workspace.visual.language === 'en' ? en : es;
-  let processing = $derived(running || storageBusy);
+  let processing = $derived(running || storageBusy || executing);
   let mascot = $derived.by(() => {
     if (busy) return { image: thinkingMascot, status: tr('Preparando respuesta…', 'Preparing a reply…') };
+    if (executing) return { image: analyzingMascot, status: tr('Ejecutando el análisis…', 'Running the analysis…') };
     if (running) return { image: analyzingMascot, status: tr('Consultando las fuentes…', 'Fetching data…') };
     if (failedQuestion || acquisitionError) return { image: errorMascot, status: tr('La consulta no pudo completarse.', 'The request could not be completed.') };
-    if (series.length) return { image: discoveryMascot, status: tr('Resultados disponibles', 'Results available') };
+    if (series.length || digestFresh) return { image: discoveryMascot, status: tr('Resultados disponibles', 'Results available') };
     if (messages.length) return { image: restingMascot, status: tr('Esperando tu mensaje', 'Waiting for your message') };
     return { image: idleMascot, status: '' };
   });
@@ -68,13 +74,36 @@
     const history = messages.filter(message => !message.temporary).slice(-8).map(({ role, text, status }) => ({ role, text: (text + (status ? '\n' + status : '')).slice(0, 900) }));
     if (retryQuestion && history.at(-1)?.role === 'user' && history.at(-1)?.text === retryQuestion.slice(0, 900)) history.pop();
     const results = series.filter(item => item.summary).slice(0, 4).map(item => item.summary);
-    const prefix = { today, current, sourceOptions, results, omittedResults: Math.max(0, series.length - results.length) };
-    while (history.length && JSON.stringify({ ...prefix, history }).length > 18000) history.shift();
-    while (results.length && JSON.stringify({ ...prefix, history }).length > 18000) {
+    const run = $analysisRun;
+    const fresh = run && run.key === JSON.stringify(data);
+    const prefix = { today, current, sourceOptions, results, omittedResults: Math.max(0, series.length - results.length),
+      analysisDigest: fresh ? run.response.assistant_digest : undefined, analysisStale: run && !fresh ? true : undefined };
+    while (history.length && JSON.stringify({ ...prefix, history }).length > CONTEXT_LIMIT) history.shift();
+    while (results.length && JSON.stringify({ ...prefix, history }).length > CONTEXT_LIMIT) {
       results.pop(); prefix.omittedResults += 1;
     }
-    if (JSON.stringify({ ...prefix, history }).length > 18000) throw new Error('La investigación es demasiado grande para el chat. Reducí las selecciones o variables.');
+    if (prefix.analysisDigest && JSON.stringify({ ...prefix, history }).length > CONTEXT_LIMIT) {
+      prefix.analysisDigest = undefined; prefix.analysisStale = true;
+    }
+    if (JSON.stringify({ ...prefix, history }).length > CONTEXT_LIMIT) throw new Error('La investigación es demasiado grande para el chat. Reducí las selecciones o variables.');
     return JSON.stringify({ ...prefix, history });
+  }
+
+  async function runProposal(message) {
+    if (executing || busy || processing) return;
+    const investigation = buildInvestigation();
+    if (!investigation) return;
+    executing = true;
+    try {
+      await executeAnalysis(investigation, message.analysis, JSON.stringify($workspace.data));
+      message.executed = true;
+      onanalysis();
+    } catch (error) {
+      messages.push({ role: 'assistant', text: String(error.message ?? error), temporary: true });
+      await scrollToLatest();
+    } finally {
+      executing = false;
+    }
   }
 
   async function scrollToLatest() {
@@ -108,7 +137,7 @@
     let context;
     try { context = contextFor(snapshot, retry ? question : null); }
     catch (error) { messages.push({ role: 'assistant', text: error.message }); return; }
-    const evidenceKey = JSON.stringify(series.map(item => item.summary));
+    const evidenceKey = JSON.stringify([series.map(item => item.summary), $analysisRun?.key]);
     const language = snapshot.visual.language;
     if (!retry) messages.push({ role: 'user', text: question });
     failedQuestion = '';
@@ -117,7 +146,7 @@
     await scrollToLatest();
     try {
       const ensureCurrent = () => {
-        if (JSON.stringify($workspace) !== original || JSON.stringify(series.map(item => item.summary)) !== evidenceKey) {
+        if (JSON.stringify($workspace) !== original || JSON.stringify([series.map(item => item.summary), $analysisRun?.key]) !== evidenceKey) {
           throw new Error(tr('La investigación cambió. Volvé a enviar la consulta.', 'The investigation changed. Please resend the question.'));
         }
       };
@@ -125,22 +154,25 @@
       for (let attempt = 0; attempt < 2; attempt++) {
         let reply;
         let next;
+        let settings;
         try {
           reply = await pyInvoke('interpret_question', { question, context, language, feedback });
         } catch (error) {
           const reason = String(error.message ?? error);
           if (attempt || /HTTP 4[0-9]{2}/.test(reason)) throw error;
           feedback = reason.includes('propuesta inválida')
-            ? 'The previous reply violated the response schema. Return a valid proposal for the original question.'
+            ? 'The previous reply violated the response schema. Return a valid proposal for the original question. Detail: ' + reason.slice(0, 400)
             : '';
           recovering = true;
           await new Promise(resolve => setTimeout(resolve, 2000));
           continue;
         }
         ensureCurrent();
+        const { analysis, ...rest } = reply.changes;
+        settings = rest;
         try {
-          if (Object.keys(reply.changes).length) next = await configureWorkspace(snapshot, reply.changes, pyInvoke, language);
-          if (reply.readyToProcess === true) prepareInvestigation((next ?? snapshot).data);
+          if (Object.keys(settings).length) next = await configureWorkspace(snapshot, settings, pyInvoke, language);
+          if (reply.readyToProcess === true && !analysis) prepareInvestigation((next ?? snapshot).data);
         } catch (error) {
           const reason = String(error.message ?? error);
           if (/^(Hay varios lugares|No encontré|No pude confirmar)/.test(reason)) {
@@ -153,18 +185,19 @@
           continue;
         }
         ensureCurrent();
-        const applied = next && JSON.stringify(next) !== original ? reply.changes : null;
+        const applied = next && JSON.stringify(next) !== original ? settings : null;
         if (applied) {
-          const changedInvestigation = JSON.stringify(next.data) !== JSON.stringify(snapshot.data);
+          if (JSON.stringify(next.data) !== JSON.stringify(snapshot.data)) configured = true;
           workspace.set(next);
-          if (changedInvestigation) {
-            configured = true;
-          }
         }
-        messages.push({ role: 'assistant', text: reply.message,
-          status: applied ? tr('Configuración aplicada.', 'Settings applied.') : '',
-          evidence: series.length && !reply.readyToProcess && !Object.keys(reply.changes).length ? original : null });
-        if (reply.readyToProcess === true) {
+        const autoProcess = reply.readyToProcess === true && !analysis;
+        const status = [
+          applied ? tr('Configuración aplicada.', 'Settings applied.') : '',
+          analysis ? tr('Revisá la propuesta y pulsá Ejecutar análisis.', 'Review the proposal and select Run analysis.') : ''
+        ].filter(Boolean).join('\n');
+        messages.push({ role: 'assistant', text: reply.message, analysis: analysis ?? null, status,
+          evidence: (series.length || digestFresh) && !autoProcess && !Object.keys(settings).length && !analysis ? original : null });
+        if (autoProcess) {
           configured = true;
           onprocess();
         }
@@ -212,6 +245,15 @@
         <p>{message.text}</p>
         {#if message.status}<p class="quiet">{message.status}</p>{/if}
         {#if message.evidence && message.evidence !== JSON.stringify($workspace)}<p class="quiet">Esta explicación corresponde a una configuración anterior. Procesá la actual para actualizarla.</p>{/if}
+        {#if message.analysis}
+          <details open>
+            <summary>{tr('Análisis propuesto', 'Proposed analysis')}: {message.analysis.struct}</summary>
+            <pre>{JSON.stringify(message.analysis, null, 2)}</pre>
+          </details>
+          <button class="primary" onclick={() => runProposal(message)} disabled={executing || busy || processing}>
+            {executing ? tr('Analizando…', 'Analyzing…') : message.executed ? tr('Ejecutar de nuevo', 'Run again') : tr('Ejecutar análisis', 'Run analysis')}
+          </button>
+        {/if}
       </article>
     {/each}
   </div>
@@ -237,9 +279,9 @@
     {#if acquisitionError}
       <button onclick={onprocess} disabled={busy || processing || !prepared.investigation}>{tr('Reintentar procesamiento', 'Retry processing')}</button>
     {/if}
-    {#if series.length}
-      <button onclick={onresults} disabled={busy || processing}>{tr('Ver resultados', 'View results')}</button>
-      <button onclick={event => send(event, 'Explicame los resultados actuales en lenguaje sencillo, con sus fuentes, unidades y limitaciones.')} disabled={busy || processing}>{tr('Explicar resultados', 'Explain results')}</button>
+    {#if series.length || digestFresh}
+      <button onclick={series.length ? onresults : onanalysis} disabled={busy || processing}>{tr('Ver resultados', 'View results')}</button>
+      <button onclick={event => send(event, 'Explicame los resultados actuales en lenguaje sencillo, con sus fuentes, unidades y limitaciones.')} disabled={busy || processing}>Explicar resultados</button>
     {/if}
   </div>
   <form onsubmit={send}>

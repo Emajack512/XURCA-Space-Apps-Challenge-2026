@@ -144,7 +144,7 @@ Solo se listan los que exige el catálogo. La columna "Ola" remite a `12_ROADMAP
 |---|---|---|---|
 | numpy, numba, scipy | En `pyproject.toml` | Núcleo | |
 | pydantic 2, jsonschema, anyio | En `pyproject.toml` | Contratos y ejecución del Handler | No se agregan dependencias nuevas para el Handler |
-| statsmodels | **Opcional, fuera de `pyproject.toml`** | `stl`, `arima`, `sarima`, `holt_winters` | Necesario para rupturas con STL y para toda la línea predictiva → decisión D-06 |
-| pymannkendall | Opcional | `modified_mann_kendall` | Necesario para Q03 con autocorrelación → D-06 |
-| ruptures | Opcional | `pelt` | Necesario para rupturas → D-06 |
+| statsmodels | En `pyproject.toml` (D-06) | `stl`, `arima`, `sarima`, `holt_winters` | Necesario para rupturas con STL y para toda la línea predictiva |
+| pymannkendall | En `pyproject.toml` (D-06) | `modified_mann_kendall` | Necesario para Q03 con autocorrelación |
+| ruptures | En `pyproject.toml` (D-06) | `pelt` | Necesario para rupturas |
 | scikit-learn, PyWavelets, river, tslearn | Opcionales | `isolation_forest`, `wavelet`, `adwin`, `dtw_kmeans` | Sin uso asignado en el catálogo; no se empaquetan por ahora |

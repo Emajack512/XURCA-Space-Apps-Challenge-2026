@@ -4,7 +4,7 @@ import csv
 import io
 from datetime import date, datetime, timedelta, timezone
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 from urllib.request import Request, urlopen
 
 from .public_sources import number, request_json
@@ -27,7 +27,11 @@ def read_text(url, provider):
             return response.read().decode("utf-8-sig")
     except HTTPError as error:
         raise ValueError(f"{provider}: HTTP {error.code}. Revisá el producto y las fechas.") from error
-    except (URLError, TimeoutError, UnicodeError) as error:
+    except (URLError, TimeoutError) as error:
+        host = urlparse(url).hostname
+        raise ValueError(f"No se pudo conectar con {provider} ({host}). El servidor no respondió: revisá tu conexión, "
+                         "probá más tarde o quitá esa variable y procesá de nuevo.") from error
+    except UnicodeError as error:
         raise ValueError(f"No se pudo leer la respuesta de {provider}.") from error
 
 
