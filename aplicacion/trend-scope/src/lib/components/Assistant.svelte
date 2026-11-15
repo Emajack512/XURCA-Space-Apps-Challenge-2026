@@ -157,8 +157,7 @@
         const status = [
           applied ? tr('Configuración actualizada. Pulsá Procesar para consultar los datos.', 'Settings updated. Select Process to fetch the data.') : '',
           analysis ? tr('Análisis propuesto: revisalo y pulsá Ejecutar análisis. No se ejecuta solo.', 'Analysis proposed: review it and select Run analysis. It does not run by itself.') : ''
-        ].filter(Boolean).join('
-');
+        ].filter(Boolean).join('\n');
         messages.push({ role: 'assistant', text: reply.message, applied, analysis: analysis ?? null, status,
           evidence: (series.length || digestFresh) && !Object.keys(settings).length && !analysis ? original : null });
         return;
