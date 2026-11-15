@@ -3,6 +3,50 @@
   "reviewedOn": "2026-11-14",
   "products": [
     {
+      "id": "chirps-v3-daily",
+      "access": "ucsb.chirps.daily",
+      "product": "CHIRPS v3 diario",
+      "variables": [
+        "precipitation"
+      ],
+      "geography": "land-grid",
+      "selection": "Point/Area",
+      "cadence": "daily",
+      "from": "1981-01-01",
+      "maxDays": 366,
+      "publisherCatalog": true,
+      "reference": "https://www.chc.ucsb.edu/data/chirps3"
+    },
+    {
+      "id": "usgs-comcat-count",
+      "access": "usgs.earthquakes",
+      "product": "USGS ComCat",
+      "variables": [
+        "count"
+      ],
+      "geography": "event-catalog",
+      "selection": "Area",
+      "cadence": "daily",
+      "from": "1900-01-01",
+      "publisherCatalog": true,
+      "reference": "https://earthquake.usgs.gov/data/comcat/availability.php"
+    },
+    {
+      "id": "usgs-comcat-events",
+      "access": "usgs.earthquakes",
+      "product": "USGS ComCat",
+      "variables": [
+        "magnitude",
+        "depth"
+      ],
+      "geography": "event-catalog",
+      "selection": "Area",
+      "cadence": "event",
+      "from": "1900-01-01",
+      "publisherCatalog": true,
+      "reference": "https://earthquake.usgs.gov/data/comcat/availability.php"
+    },
+    {
       "id": "chirps-v3-monthly",
       "access": "ucsb.chirps.monthly",
       "product": "CHIRPS v3 final",

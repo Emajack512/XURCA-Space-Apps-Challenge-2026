@@ -25,10 +25,15 @@ export const geographicEntityRoutes = new Set([
 ]);
 export const entityGeometries = ['Point', 'Polygon', 'MultiPolygon'];
 
+export function providerGeometries(route) {
+  if (!route) return [];
+  if (geographicEntityRoutes.has(route.id)) return entityGeometries;
+  return route.geometry ?? (['nasa.power.monthly', 'openmeteo.archive.daily'].includes(route.id) ? ['Point'] : []);
+}
+
 export function providerMatchesScope(route, scope) {
   if (!scope || scope === 'both') return true;
-  const geometries = geographicEntityRoutes.has(route.id) ? entityGeometries
-    : route.geometry ?? (['nasa.power.monthly', 'openmeteo.archive.daily'].includes(route.id) ? ['Point'] : []);
+  const geometries = providerGeometries(route);
   return !geometries.length || geometries.some(type => geometryMatchesScope(type, scope));
 }
 
@@ -88,7 +93,7 @@ export const catalog = [
 
 export const assistantCatalog = catalog.filter(item => [
   'nasa.power.monthly', 'noaa.ncei.station', 'nasa.swot.hydrocron', 'openmeteo.archive.daily',
-  'ucsb.chirps.monthly', 'argentina.pmra.monthly', 'noaa.cpc.oni'
+  'ucsb.chirps.monthly', 'ucsb.chirps.daily', 'argentina.pmra.monthly', 'noaa.cpc.oni', 'usgs.earthquakes'
 ].includes(item.route.id));
 
 export function sourceConfig(id) {
