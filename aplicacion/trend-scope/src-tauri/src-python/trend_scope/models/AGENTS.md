@@ -127,8 +127,8 @@ Orden recomendado: el de la numeración. «Destraba» indica fenómenos del cat�
 
 **Estado de la cola** (única línea que se edita al entregar una tarea):
 
-- Pendientes: W06, W05, W04, W07, W08, W09, W20, W13, W19, W10, W11, W12, W14, W15, W16
-- Candidate: W01 (`robust_z` corregido el 2026-11-15; pendiente de auditoría), W02, W03, W17, W18
+- Pendientes: W05, W04
+- Candidate: W01 (`robust_z` corregido el 2026-11-15; pendiente de auditoría), W02, W03, W06, W07, W08, W09, W10, W11, W12, W13, W14, W15, W16, W17, W18, W19, W20 (todas implementadas sin ejecutar ni probar; W06-W09, W17, W18 y W20 se usan desde los handlers, el resto son API de Python sin registrar)
 - Aprobadas tras auditoría: —
 
 | ID | Función | Depende de | Destraba |

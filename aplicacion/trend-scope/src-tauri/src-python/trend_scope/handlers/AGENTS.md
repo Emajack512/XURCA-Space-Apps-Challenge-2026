@@ -17,7 +17,17 @@ Rutas: `PY/` = `trend_scope/` · `M/` = `PY/models/`.
 | Fase 1 · handlers | `contracts.py`, `analysis_structs.py`, `analysis_handler.py`, `preparation.py`, `algorithm_handler.py`, `decision.py`, `data_handler.py` |
 | Fase 1 · comandos | `desktop.py`: `run_analysis`, `list_analyses` |
 
-Structs disponibles: `describe`, `trend_significance`, `anomaly`, `drought_spi`, `regression_fit`. Los de fases 2 y 3 están declarados y `list_analyses` los informa `available: false`.
+**Fases 3 y 4 (2026-11-15), también sin ejecutar ni verificar:**
+
+| Hecho | Archivos |
+|---|---|
+| Fase 3 · pronóstico | `M/forecasting/` (`baselines.py` W07, `backtest.py` W08, `intervals.py` W09, `prob_metrics.py` W13, `forecasters.py` W20, `pipeline.py` = método registrado `forecast_backtest`), `M/stats/multiple_testing.py` (W06) |
+| Fase 3 · handlers | structs `forecast` y `spatial_pattern`; `spatial.py` (muestreo de puntos en un polígono); bloque `forecast` y veredicto `forecast_threshold` en `decision.py`; `_analyze_pattern` (tendencia por punto + FDR) en `data_handler.py`; topes provisionales de horizonte en `analysis_handler.check` |
+| Fase 4 · librerías sin registrar | W19 `signal/convolution2d.py`, W10 `climate/etccdi.py`, W11 `stats/bootstrap.py`, W12 `fire/fwi.py`, W14 `vegetation/burn_indices.py`, W15 `landcover/transitions.py`, W16 `atmosphere/hypsometric.py` |
+
+Structs disponibles: `describe`, `trend_significance`, `anomaly`, `drought_spi`, `regression_fit`, `forecast`, `spatial_pattern`. Los de la fase 2 (`seasonality`, `change_point`, `smoothing`, `extreme_events`, `relationship`) siguen declarados con `planned=True` y `list_analyses` los informa `available: false`. **La fase 2 no se hizo**: faltan W05 (correlación con desfases), W04 (percentiles y eventos) y los structs que las usan.
+
+Las librerías de la fase 4 son API de Python: no están registradas en `catalog_registry` (necesitan adaptadores de contrato propio: rejillas 2D, series diarias con etiquetas) ni las usa ningún struct todavía. `fire/fwi.py` rechaza latitudes con |lat| < 30° (no se inventaron factores de duración del día tropicales) y no se comparó contra tablas publicadas.
 
 Desvíos respecto del documento 23: no se implementó el paso opcional `lttb` de `describe` (los arreglos largos se omiten y se avisa); `lag1_autocorrelation` recibe un `groups` opcional para quitar el ciclo estacional; se agregó el código de error `CADENCE_INCOMPATIBLE`; no se generaron archivos de schema ni fixtures (`contracts.export_schemas()` los produce bajo demanda).
 
