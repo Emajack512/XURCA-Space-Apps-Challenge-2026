@@ -1,0 +1,1 @@
+Fixtures pendientes de ejecución con el Python indicado: el venv no arranca porque falta su intérprete base Python311. No hay datos simulados. `manual_check.py` genera un NPZ y un JSON por proveedor, con URLs y fecha UTC de descarga.
