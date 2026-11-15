@@ -176,6 +176,12 @@ This is Python handler verification, not a native-window or end-to-end NASA test
 preserved byte-for-byte; no new numerical or integration failure is hidden by
 this formatting exception.
 
+Subsequent collaborator commit `6303f22` was integrated without conflicts in
+merge `ba7d096`. It changes sources/coverage, not models. After this integration,
+the normal-import handler and extended-registry checks passed **20 tests**.
+Protected implementation files remained unchanged. Native desktop execution and
+the pending methods above remain outside the verified scope of this delivery.
+
 Sources: [SciPy Sen](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.theilslopes.html),
 [SciPy signal](https://docs.scipy.org/doc/scipy/reference/signal.html),
 [statsmodels SARIMAX](https://www.statsmodels.org/stable/generated/statsmodels.tsa.statespace.sarimax.SARIMAX.html),
