@@ -1,6 +1,8 @@
 """Point series from the public Open-Meteo historical API."""
 
 import math
+from collections import defaultdict
+from statistics import mean
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 
@@ -24,14 +26,19 @@ VARIABLE_MODELS = {
     "pressure_msl_mean": "era5",
     "snowfall_sum": "era5",
     "cloud_cover_mean": "era5",
+    "snow_depth": "era5_land",
     "et0_fao_evapotranspiration": "era5",
 }
 
 
 def archive_data(longitude, latitude, start, end, variables, model):
+    daily = [variable for variable in variables if variable != "snow_depth"]
+    params = {"daily": ",".join(daily)} if daily else {}
+    if "snow_depth" in variables:
+        params["hourly"] = "snow_depth"
     return request_json(
         ENDPOINT, "Open-Meteo", longitude=longitude, latitude=latitude,
-        start_date=start, end_date=end, daily=",".join(variables),
+        start_date=start, end_date=end, **params,
         models=model, timezone="GMT", cell_selection="land",
     )
 
@@ -80,9 +87,12 @@ def fetch_reanalysis(sources, investigation):
             variable = source["upstream"]["variableId"]
             values = daily.get(variable)
             unit = (payload.get("daily_units") or {}).get(variable)
-            if not unit or not isinstance(values, list) or len(values) != len(dates):
-                raise ValueError(f"Open-Meteo no devolvió una serie válida para {variable}.")
-            by_date = dict(zip(dates, values))
+            if variable == "snow_depth":
+                unit, by_date = daily_snow_depth(payload)
+            else:
+                if not unit or not isinstance(values, list) or len(values) != len(dates):
+                    raise ValueError(f"Open-Meteo no devolvió una serie válida para {variable}.")
+                by_date = dict(zip(dates, values))
             points = []
             for offset in range((end - start).days + 1):
                 day = (start + timedelta(days=offset)).isoformat()
@@ -101,3 +111,17 @@ def fetch_reanalysis(sources, investigation):
                 "url": url, "retrievedAt": datetime.now(timezone.utc).isoformat(),
             })
     return results
+
+
+def daily_snow_depth(payload):
+    hourly = payload.get("hourly") or {}
+    stamps = hourly.get("time") or []
+    values = hourly.get("snow_depth")
+    unit = (payload.get("hourly_units") or {}).get("snow_depth")
+    if not unit or not isinstance(values, list) or len(values) != len(stamps):
+        raise ValueError("Open-Meteo no devolvió una serie válida de espesor de nieve.")
+    samples = defaultdict(dict)
+    for stamp, value in zip(stamps, values):
+        if isinstance(value, (int, float)) and math.isfinite(value):
+            samples[stamp[:10]][stamp] = value
+    return unit, {day: mean(hours.values()) for day, hours in samples.items() if len(hours) == 24}

@@ -36,11 +36,16 @@ function bounded(value, min, max) {
 
 function validate(changes) {
   if (!checkShape(changes, contract.schema.properties.changes)) throw new Error('La IA propuso campos de configuración inválidos.');
-  const { point, place, places, polygon, sources, appearance, workspace, camera } = changes;
+  const { point, place, places, polygon, coast, sources, appearance, workspace, camera } = changes;
   if (sources?.some(item => item.geometryId && item.pointId && item.geometryId !== item.pointId)) {
     throw new Error('Cada variable admite una sola selección geográfica.');
   }
-  if ([point, place, places, polygon].filter(Boolean).length > 1) throw new Error('Indicá una sola selección geográfica por mensaje.');
+  if ([point, place, places, polygon, coast].filter(Boolean).length > 1) throw new Error('Indicá una sola selección geográfica por mensaje.');
+  if (coast && (!bounded(coast.distanceKm, 1, 500) || !coast.countries.length || coast.countries.length > 5
+      || coast.countries.some(name => name.trim().length < 2 || name.length > 100)
+      || coast.waters.trim().length < 2 || coast.waters.length > 100)) {
+    throw new Error('Indicá los países, el tramo y una distancia costera entre 1 y 500 km.');
+  }
   if (point && !validCoordinates(point.longitude, point.latitude)) throw new Error('Las coordenadas están fuera del rango WGS 84.');
   if (polygon && (polygon.length > 100 || !polygon.every(p => p.length === 2 && validCoordinates(...p)) || !closedRegion(polygon))) {
     throw new Error('El polígono requiere vértices válidos en orden longitud, latitud.');
@@ -61,13 +66,17 @@ function validate(changes) {
 const catalogEntry = source => catalog.find(entry => entry.id === source.id.split('::')[0]);
 
 function configureSource(item, features, target, existing, scope) {
-  const entry = catalog.find(source => source.id === item.id);
+  const reference = item.geometryId ?? item.pointId;
+  const requested = reference ? features.find(feature => feature.id === reference) : target;
+  const area = requested ? requested.geometry.type !== 'Point' : scope === 'area';
+  const areaSources = { 'power-temperature': 'power-temperature-area', 'power-solar': 'power-solar-area' };
+  const sourceId = area ? areaSources[item.id] ?? item.id : item.id;
+  const entry = catalog.find(source => source.id === sourceId);
   if (!entry) throw new Error('Una variable propuesta no está en el catálogo: ' + item.id);
-  const config = sourceConfig(item.id);
+  const config = sourceConfig(sourceId);
   if (config.access === 'noaa.cpc.oni') return config;
   const { upstream } = config;
   const compatible = features.filter(feature => providerGeometries(entry.route).includes(feature.geometry.type));
-  const reference = item.geometryId ?? item.pointId;
   const preferred = reference ?? target?.id ?? existing?.upstream.geometryId;
   const scoped = compatible.filter(feature => geometryMatchesScope(feature.geometry.type, scope));
   const selection = preferred ? compatible.find(feature => feature.id === preferred)
@@ -78,19 +87,33 @@ function configureSource(item, features, target, existing, scope) {
   return config;
 }
 
-export async function configureWorkspace(snapshot, changes, invoke, language) {
+export function addsToInvestigation(question) {
+  const words = question.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const replaces = /\b(solo|solamente|reemplaz\w*|cambia\w*|en vez de|quita\w*|borra\w*|only|instead|replace|remove|clear)\b/;
+  return !replaces.test(words) && /\b(tambien|ademas|agrega\w*|anad\w*|suma\w*|inclu\w*|also|too|add|include|as well)\b/.test(words);
+}
+
+export async function configureWorkspace(snapshot, changes, invoke, language, additive = false) {
   validate(changes);
   const next = JSON.parse(JSON.stringify(snapshot));
   const { data, visual } = next;
   for (const key of ['title', 'objective', 'description']) if (key in changes) data[key] = changes[key];
   if (changes.time) {
-    const { start, end } = { ...data.time, ...changes.time };
+    const years = changes.time.years?.slice().sort((a, b) => a - b);
+    if (years && (!years.length || years.length > 25 || new Set(years).size !== years.length
+      || years.some(year => year < 1900 || year >= new Date().getFullYear()))) {
+      throw new Error('Elegí años calendario completos que ya hayan terminado.');
+    }
+    const start = years ? years[0] + '-01-01' : changes.time.start ?? data.time.start;
+    const end = years ? years.at(-1) + '-12-31' : changes.time.end ?? data.time.end;
     if (!isoDate(start) || !isoDate(end) || start > end) throw new Error('Ingresá fechas válidas en orden.');
     Object.assign(data.time, { start, end });
+    if (years) data.time.years = years;
+    else delete data.time.years;
   }
 
   const selection = data.geography.selection;
-  if (changes.clearSelection) {
+  if (changes.clearSelection && !additive) {
     selection.features = [];
     for (const source of data.sources) source.upstream.geometryId = null;
   }
@@ -107,16 +130,17 @@ export async function configureWorkspace(snapshot, changes, invoke, language) {
   for (const { name, kind } of changes.places ?? (changes.place ? [changes.place] : [])) {
     if (name.trim().length < 2 || name.length > 100) throw new Error('Indicá un nombre de lugar válido.');
     const regional = kind !== 'localidades';
-    const query = regional ? name.split(',')[0].trim() : name;
+    const query = regional && kind !== 'regiones' ? name.split(',')[0].trim() : name;
     const found = JSON.parse(await invoke('search_places', { query, kind, language }));
     const normalize = text => (text ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
     const parts = name.split(',').map(normalize).filter(Boolean);
     const exact = found.filter(match => normalize(match.name) === parts[0]
       && parts.slice(1).every(part => [match.province, match.country].some(value => normalize(value) === part)));
-    if (!exact.length && found.length === 1) {
-      const candidate = found[0];
+    if (!exact.length && found.length && (found.length === 1 || (!regional && parts.length > 1))) {
+      const candidates = found.slice(0, 4).map(candidate =>
+        [candidate.name, candidate.province, candidate.country].filter(Boolean).join(', '));
       throw new Error('No pude confirmar ' + name + '. El buscador devolvió: '
-        + [candidate.name, candidate.province, candidate.country].filter(Boolean).join(', ') + '. Precisá la localidad.');
+        + candidates.join(' / ') + '. Precisá la localidad o indicá sus coordenadas.');
     }
     const matches = exact.length ? exact : found;
 
@@ -134,43 +158,71 @@ export async function configureWorkspace(snapshot, changes, invoke, language) {
     }
     additions.push({ geometry, name: place.name, center: [longitude, latitude] });
   }
+  if (changes.coast) {
+    const regions = await invoke('load_coastal_regions', changes.coast);
+    if (regions.length !== changes.coast.countries.length || regions.some(region =>
+      !['Polygon', 'MultiPolygon'].includes(region.geometry?.type))) {
+      throw new Error('No pude confirmar todos los tramos de costa.');
+    }
+    additions.push(...regions.map(region => ({ ...region, coastDistanceKm: changes.coast.distanceKm })));
+  }
   const newFeatures = [];
-  for (const { name, geometry } of additions) {
+  for (const { name, geometry, coastDistanceKm } of additions) {
     let feature = selection.features.find(item => JSON.stringify(item.geometry) === JSON.stringify(geometry));
     if (!feature) {
       feature = { type: 'Feature', id: crypto.randomUUID(), properties: { name: name ?? '' }, geometry };
       selection.features.push(feature);
     }
+    if (coastDistanceKm !== undefined) feature.properties.coastDistanceKm = coastDistanceKm;
     if (!newFeatures.includes(feature)) newFeatures.push(feature);
   }
   if (additions[0]?.center) {
     const [longitude, latitude] = additions[0].center;
     Object.assign(visual.map.camera, { longitude, latitude });
   }
-  if (changes.sources) {
-    const configured = changes.sources.flatMap(item => {
+  const requestedSources = changes.sources ?? (additive && newFeatures.length
+    ? [...new Set(data.sources.map(source => catalogEntry(source)?.id).filter(Boolean))].map(id => ({ id }))
+    : null);
+  if (requestedSources) {
+    const configured = requestedSources.flatMap(item => {
       const targets = !(item.geometryId || item.pointId) && newFeatures.length ? newFeatures : [null];
       const existing = data.sources.filter(source => catalogEntry(source)?.id === item.id);
       return targets.map(feature => configureSource(item, selection.features, feature,
         existing.length === 1 ? existing[0] : null, data.geography.scope));
     });
-    const unique = [...new Map(configured.map(source => [source.id + '::' + source.upstream.geometryId, source])).values()];
+    const sourceKey = source => (catalogEntry(source)?.id ?? source.id) + '::' + source.upstream.geometryId;
+    const additionsByKey = new Map((additive ? data.sources : []).map(source => [sourceKey(source), source]));
+    for (const source of configured) {
+      const key = sourceKey(source);
+      if (!additionsByKey.has(key)) additionsByKey.set(key, source);
+    }
+    const unique = [...additionsByKey.values()];
     const counts = new Map();
-    for (const source of unique) counts.set(source.id, (counts.get(source.id) ?? 0) + 1);
     for (const source of unique) {
-      const existing = data.sources.find(item => catalogEntry(item)?.id === source.id && item.upstream.geometryId === source.upstream.geometryId);
-      source.id = existing?.id ?? (counts.get(source.id) > 1 ? source.id + '::' + source.upstream.geometryId : source.id);
+      const base = catalogEntry(source)?.id ?? source.id;
+      counts.set(base, (counts.get(base) ?? 0) + 1);
+    }
+    for (const source of unique) {
+      const base = catalogEntry(source)?.id ?? source.id;
+      const existing = data.sources.find(item => sourceKey(item) === sourceKey(source));
+      source.id = existing?.id ?? (counts.get(base) > 1 ? base + '::' + source.upstream.geometryId : base);
     }
     data.sources = unique;
+    if (!changes.time && unique.length && unique.every(source => source.access === 'noaa.etopo.area')) {
+      delete data.time.years;
+    }
     if (data.sources.length > 25) throw new Error('La investigación admite hasta 25 series. Reducí los lugares o variables.');
   }
-  if (changes.sources || newFeatures.length) {
+  if (requestedSources || newFeatures.length) {
     const ids = new Set(data.sources.map(source => source.upstream.geometryId).filter(Boolean));
-    const relevant = changes.sources && ids.size ? selection.features.filter(feature => ids.has(feature.id)) : selection.features;
+    const relevant = requestedSources && ids.size ? selection.features.filter(feature => ids.has(feature.id)) : selection.features;
     const scopes = new Set(relevant.map(feature => feature.geometry.type === 'Point' ? 'point' : 'area'));
     if (scopes.size) data.geography.scope = scopes.size === 2 ? 'both' : scopes.values().next().value;
   }
-  if (changes.sources || changes.time) {
+  if (data.time.years?.length && data.sources.some(source => !['ucsb.chirps.monthly', 'argentina.pmra.monthly', 'nasa.power.solar.area', 'nasa.power.temperature.area'].includes(source.access))) {
+    throw new Error('Para años separados usá CHIRPS o PMRA mensual, o un producto regional de NASA POWER.');
+  }
+  if (requestedSources || changes.time) {
     const cadences = await Promise.all(data.sources.map(async source => {
       const entry = catalogEntry(source);
       if (!entry) return null;

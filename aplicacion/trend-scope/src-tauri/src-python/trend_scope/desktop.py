@@ -4,16 +4,18 @@ from anyio import to_thread
 from anyio.from_thread import start_blocking_portal
 from pytauri import Commands, builder_factory, context_factory
 from pytauri.ipc import InvokeException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 import json
-from typing import Optional
+from typing import Literal, Optional
 
 from .main import RegressionPayload, execute_regression as execute_regression_service
 from .services.acquisition import acquire
+from .services.downloads import search_collections as discover_collections
 from .services.appeears import catalog as appeears_catalog
-from .services.assistant import AssistantQuestion, interpret
+from .services.assistant import AssistantQuestion, PreparationRequest, interpret, prepare_question
 from .services.evidence import with_evidence
+from .services.coastal_regions import coastal_regions
 from .services.coverage import CoverageRequest, coverage
 from .services.public_sources import find_places, place_boundary
 from .services.station_catalogs import ina_variables
@@ -74,6 +76,15 @@ async def list_ina_variables() -> list:
         raise InvokeException(str(error)) from error
 
 
+class CatalogSearchRequest(BaseModel):
+    keyword: str = Field(min_length=2, max_length=100)
+
+
+@commands.command()
+async def search_collections(body: CatalogSearchRequest) -> dict:
+    return await to_thread.run_sync(discover_collections, body.keyword.strip())
+
+
 class PlaceRequest(BaseModel):
     query: str
     kind: str
@@ -87,6 +98,24 @@ async def search_places(body: PlaceRequest) -> str:
     except ValueError as error:
         raise InvokeException(str(error)) from error
     return json.dumps(places, allow_nan=False)
+
+
+class CoastRequest(BaseModel):
+    countries: list[str] = Field(min_length=1, max_length=5)
+    territory: Literal["mainland", "all"]
+    side: Literal["sea", "land", "both"]
+    distanceKm: float = Field(ge=1, le=500, allow_inf_nan=False)
+    waters: Optional[str] = Field(default=None, min_length=2, max_length=100)
+
+
+@commands.command()
+async def load_coastal_regions(body: CoastRequest) -> list:
+    try:
+        return await to_thread.run_sync(
+            coastal_regions, body.countries, body.territory, body.side, body.distanceKm, body.waters
+        )
+    except ValueError as error:
+        raise InvokeException(str(error)) from error
 
 
 class PlaceBoundaryRequest(BaseModel):
@@ -127,6 +156,14 @@ async def list_analyses() -> str:
 @commands.command()
 async def evaluate_coverage(body: CoverageRequest) -> dict:
     return {"matches": coverage(body)}
+
+
+@commands.command()
+async def prepare_assistant_question(body: PreparationRequest) -> dict:
+    try:
+        return {"preparation": await to_thread.run_sync(prepare_question, body)}
+    except ValueError as error:
+        raise InvokeException(str(error)) from error
 
 
 @commands.command()

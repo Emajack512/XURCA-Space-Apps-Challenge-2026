@@ -20,7 +20,10 @@ export const providers = [
   { id: 'ucsb.chirps.monthly', label: 'CHIRPS v3 · UCSB', provider: 'UCSB', geometry: ['Point', 'Polygon', 'MultiPolygon'], hint: 'Precipitación mensual sobre tierra entre 60° S y 60° N desde 1981.', catalogOnly: true },
   { id: 'argentina.pmra.monthly', label: 'PMRAv1 · Argentina', provider: 'Gaitán y Biancari', geometry: ['Point', 'Polygon', 'MultiPolygon'], hint: 'Precipitación mensual de Argentina en celdas de 5 km. Las fechas dependen del archivo publicado.', catalogOnly: true },
   { id: 'ucsb.chirps.daily', label: 'CHIRPS v3 diario · ERA5', provider: 'UCSB', geometry: ['Point', 'Polygon', 'MultiPolygon'], hint: 'Precipitación diaria estimada. Consultas de hasta 366 días.', catalogOnly: true },
-  { id: 'noaa.ersst.monthly', label: 'NOAA ERSST v5', provider: 'NOAA', geometry: ['Point'], hint: 'Temperatura mensual del mar a 2° desde 1854.' }
+  { id: 'noaa.ersst.monthly', label: 'NOAA ERSST v5', provider: 'NOAA', geometry: ['Point'], hint: 'Temperatura mensual del mar a 2° desde 1854.' },
+  { id: 'nasa.power.solar.area', label: 'NASA POWER · Radiación regional', provider: 'NASA', geometry: ['Polygon', 'MultiPolygon'], catalogOnly: true },
+  { id: 'noaa.etopo.area', label: 'NOAA ETOPO1 · Batimetría', provider: 'NOAA', geometry: ['Polygon', 'MultiPolygon'], catalogOnly: true },
+  { id: 'nasa.power.temperature.area', label: 'NASA POWER · Temperatura regional', provider: 'NASA', geometry: ['Polygon', 'MultiPolygon'], catalogOnly: true }
 ];
 
 export const geographicEntityRoutes = new Set([
@@ -54,9 +57,15 @@ export function sourceMatchesScope(source, scope, features) {
 export const catalog = [
   ['power-precipitation', 0, 'Precipitación media diaria por mes', 'precipitation', 'PRECTOTCORR'],
   ['power-humidity', 0, 'Humedad relativa del aire', 'relative-humidity', 'RH2M'],
+  ['era5-snowfall', 3, 'Nieve caída diaria (ERA5)', 'snowfall', 'snowfall_sum'],
+  ['era5-snow-depth', 3, 'Espesor medio diario de nieve (ERA5-Land)', 'snow-depth', 'snow_depth'],
+  ['firms-fire-count', 8, 'Detecciones térmicas diarias (FIRMS VIIRS)', 'fire-detections', 'count'],
   ['power-wind', 0, 'Velocidad del viento a 2 m', 'wind-speed', 'WS2M'],
   ['power-soil', 0, 'Humedad de la zona radicular', 'soil-moisture', 'GWETROOT'],
+  ['etopo-bathymetry', 21, 'Distribución de profundidad submarina (NOAA ETOPO1)', 'bathymetry', 'depth'],
+  ['power-solar-area', 20, 'Irradiancia solar de superficie mensual (NASA POWER)', 'solar-radiation', 'ALLSKY_SFC_SW_DWN'],
   ['power-solar', 0, 'Radiación solar en superficie', 'solar-radiation', 'ALLSKY_SFC_SW_DWN'],
+  ['power-temperature-area', 22, 'Temperatura media mensual del aire a 2 m (NASA POWER)', 'temperature', 'T2M'],
   ['power-temperature', 0, 'Temperatura del aire a 2 m', 'temperature', 'T2M'],
   ['noaa-precipitation', 1, 'Precipitación acumulada mensual', 'precipitation', 'PRCP'],
   ['noaa-temperature', 1, 'Temperatura media mensual', 'temperature', 'TAVG'],
@@ -88,6 +97,7 @@ export const catalog = [
   ['ina-discharge', 14, 'Caudal', 'river-discharge', 'var-4'],
   ['ina-precipitation', 14, 'Precipitación diaria (12Z)', 'precipitation', 'var-1'],
   ['psmsl-level', 15, 'Nivel relativo del mar (RLR mensual)', 'relative-sea-level', 'rlr'],
+  ['chirps-mean-daily-rain', 16, 'Lluvia media diaria por mes (CHIRPS v3)', 'mean-daily-rain', 'precipitation_daily_mean'],
   ['chirps-monthly-precipitation', 16, 'Precipitación acumulada mensual (CHIRPS v3)', 'precipitation', 'precipitation'],
   ['pmra-monthly-precipitation', 17, 'Precipitación acumulada mensual (PMRAv1)', 'precipitation', 'precipitation'],
   ['chirps-daily-precipitation', 18, 'Precipitación acumulada diaria (CHIRPS v3)', 'precipitation', 'precipitation'],
@@ -105,8 +115,7 @@ export const catalog = [
 
 export const assistantCatalog = catalog.filter(item => [
   'nasa.power.monthly', 'noaa.ncei.station', 'nasa.swot.hydrocron', 'openmeteo.archive.daily',
-  'ucsb.chirps.monthly', 'ucsb.chirps.daily', 'argentina.pmra.monthly', 'noaa.cpc.oni', 'usgs.earthquakes',
-  'noaa.ersst.monthly'
+  'ucsb.chirps.monthly', 'ucsb.chirps.daily', 'argentina.pmra.monthly', 'noaa.cpc.oni', 'usgs.earthquakes', 'nasa.firms.area', 'nasa.power.solar.area', 'noaa.etopo.area', 'nasa.power.temperature.area', 'noaa.ersst.monthly'
 ].includes(item.route.id));
 
 const comparableVariables = {
@@ -232,7 +241,8 @@ export function sourceConfig(id) {
     : featureType ? { featureType, featureId: '' } : (route.id === 'noaa.ncei.station' || route.station) ? { stationId: '' } : {};
   return {
     id, variable: item.variable, provider: route.provider, product: route.label, access: route.id,
-    upstream: { variableId: item.code, geometryId: null, selectors }
+    upstream: { variableId: item.code, geometryId: null, selectors,
+      ...(id === 'firms-fire-count' ? { productId: 'VIIRS_SNPP_SP' } : {}) }
   };
 }
 export function customSource(routeId, code, featureType, productId) {

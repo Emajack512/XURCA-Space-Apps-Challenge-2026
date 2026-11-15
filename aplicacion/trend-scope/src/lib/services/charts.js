@@ -65,10 +65,10 @@ export function displayPoints(points, resolution, width) {
 }
 
 export function chartSpec(series, label, translate, resolution, width, light, window) {
-  const period = ({ daily: 'Día', monthly: 'Mes', weekly: 'Semana' })[series.cadence] ?? 'Fecha';
+  const period = ({ daily: 'Día', monthly: 'Mes', weekly: 'Semana', distribution: 'Profundidad' })[series.cadence] ?? 'Fecha';
   const count = isCount(series);
   const precipitation = isPrecipitation(series);
-  const type = count || precipitation ? 'bar' : series.cadence === 'event' ? 'scatter' : 'line';
+  const type = count || precipitation || series.cadence === 'distribution' ? 'bar' : series.cadence === 'event' ? 'scatter' : 'line';
   const timestamp = point => Date.parse(point.month);
   const calendar = series.points.length > 0 && series.points.every(point => Number.isFinite(timestamp(point)));
   const origin = calendar ? timestamp(series.points[0]) : 0;
@@ -98,7 +98,7 @@ export function chartSpec(series, label, translate, resolution, width, light, wi
       labels: calendar ? undefined : visible.map(point => point.month),
       datasets: [{
         label, data: calendar ? visible.map(point => ({ x: timestamp(point) - origin, y: point.value })) : visible.map(point => point.value),
-        borderColor: line, backgroundColor: line, spanGaps: false,
+        borderColor: line, backgroundColor: line, spanGaps: series.selectedYears?.length && calendar ? 40 * day : false,
         ...(type === 'bar' ? { maxBarThickness: 24 } : {
           pointRadius: type === 'scatter' ? 3 : visible.map((point, index) =>
             visible.length <= 200 || (point.value != null && visible[index - 1]?.value == null

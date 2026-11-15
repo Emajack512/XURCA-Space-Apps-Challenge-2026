@@ -13,6 +13,11 @@ VARIABLES = {
         "soil_moisture_28_to_100cm_mean", "soil_moisture_100_to_255cm_mean",
     },
     "precipitation": {"PRECTOTCORR", "PRCP", "precipitation_sum", "precipitation"},
+    "mean-daily-rain": {"precipitation_daily_mean"},
+    "bathymetry": {"depth"},
+    "snowfall": {"snowfall_sum"},
+    "snow-depth": {"snow_depth"},
+    "fire-detections": {"count"},
     "oni": {"anomaly"},
     "nino34-temperature": {"total"},
     "roni": {"roni"},
@@ -57,6 +62,10 @@ def coverage(request: CoverageRequest, today: Optional[date] = None) -> list[dic
     codes = VARIABLES.get(request.variable, set())
     matches = []
     for product in PRODUCTS:
+        if (request.variable == "fire-detections") != (product["access"] == "nasa.firms.area"):
+            continue
+        if (request.variable == "bathymetry") != (product["access"] == "noaa.etopo.area"):
+            continue
         variables = [code for code in product["variables"] if code in codes]
         if not variables:
             continue
@@ -96,6 +105,8 @@ def assess(product, request, start, end):
     if request.scope == "sea":
         if product["geography"] == "land-grid" or request.variable == "soil-moisture":
             return "incompatible", "land_only"
+    if product.get("static"):
+        return "compatible", "static_model"
     if request.end < start or request.start > end:
         return "incompatible", "outside_period"
     if request.start < start or request.end > end:

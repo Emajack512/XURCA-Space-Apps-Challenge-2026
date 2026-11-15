@@ -6,6 +6,11 @@ from statistics import fmean
 
 
 def summarize_series(series):
+    if series.get("cadence") == "distribution":
+        return {"id": series["id"], "provider": series["provider"], "product": series["product"],
+                "method": "static-area-distribution", "statistics": series["statistics"],
+                "limitations": ["ETOPO1 is static; values are sampled at 1 degree and weighted by cell area.",
+                                "No time trend was calculated."]}
     rows = []
     for point in series.get("points", []):
         value = point.get("value")

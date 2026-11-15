@@ -9,32 +9,35 @@
 
   let resolution = $derived($workspace.visual.chartResolution ?? 'auto');
   let cadence = $derived($workspace.visual.chartCadence ?? 'native');
-  let { series } = $props();
+  let { series, mapsOnly = false } = $props();
 
 </script>
 
 <section class="results-panel">
-  <header class="panel-heading"><span><ChartNoAxesCombined size={16}/> {$translate('Resultados')}</span>
+  <header class="panel-heading"><span><ChartNoAxesCombined size={16}/> {$translate(mapsOnly ? (series[0]?.map?.pointView ? 'Mapa de datos' : 'Mapa coroplético') : 'Resultados')}</span>
   </header>
   <div class="results-scroll">
     {#each series as item (item.id)}
       {@const available = item.points.filter(point => point.value !== null).length}
-      {@const label = $translate(catalog.find(source => source.id === item.id.split('::')[0])?.label ?? item.label ?? item.variable)}
+      {@const variableLabel = catalog.find(source => source.id === item.id.split('::')[0])?.label ?? item.label ?? item.variable}
+      {@const label = $translate(item.sourceSelection ? variableLabel.replace(/ \([^()]+\)$/, '') : variableLabel)}
       <article class="chart-card" data-series-id={item.id}>
         <header><strong>{label}</strong></header>
+        {#if item.sourceSelection}<p class="quiet">{item.sourceSelection}</p>{/if}
         {#if item.downloadPath}<p class="quiet"><code>{item.downloadPath}</code></p>{/if}
-        {#if item.map}
+        {#if mapsOnly && item.map}
           {#key item.map}
             <EventMap layer={item.map} {label} unit={$translate(item.map.unit ?? item.unit)}/>
           {/key}
         {/if}
         {#if item.mapMessage}<p>{item.mapMessage}</p>{/if}
-        {#if available}
+        {#if item.cadence === 'distribution' && item.message}<p>{item.message}</p>{/if}
+        {#if !mapsOnly && available}
           <ChartView series={item} {label} {resolution} {cadence}/>
-        {:else if !item.message}
+        {:else if !mapsOnly && !item.message}
           <p>{$translate('No hay valores para el período seleccionado.')}</p>
         {/if}
-        {#if item.summary?.validCount}
+        {#if !mapsOnly && item.summary?.validCount}
           <details>
             <summary>Resumen calculado sobre la serie completa</summary>
             <p>Promedio de observaciones: {item.summary.mean.toPrecision(5)} {item.unit} · mínimo: {item.summary.minimum.toPrecision(5)} · máximo: {item.summary.maximum.toPrecision(5)}</p>

@@ -4,6 +4,7 @@ import json
 from datetime import date
 
 from .appeears import fetch_appeears
+from .bathymetry import ROUTE as BATHYMETRY_ROUTE, fetch_bathymetry
 from .downloads import fetch_copernicus, fetch_earthdata, fetch_planetary
 from .environmental_series import fetch_earthquakes, fetch_ersst, fetch_ina, fetch_oisst, fetch_oni, fetch_tide_gauge
 from .firms import fetch_firms
@@ -12,6 +13,8 @@ from .reanalysis import ROUTE as REANALYSIS, fetch_reanalysis
 from .power import ROUTE, fetch_series
 from .precipitation import CHIRPS_DAILY_ROUTE, CHIRPS_ROUTE, PMRA_ROUTE, fetch_precipitation
 from .public_sources import fetch_public_series
+from .power_grid import SOLAR_ROUTE, TEMPERATURE_ROUTE, fetch_power_area
+from .spatial_resolution import has_era5_alternative, with_best_spatial_resolution
 from .station_catalogs import ENTITY_ROUTES, fetch_for_selection
 
 PUBLIC_ROUTES = {"noaa.ncei.station", "noaa.ncei.daily", "nasa.swot.hydrocron"}
@@ -21,6 +24,9 @@ SERIES_ROUTES = {
     "noaa.ersst.monthly": fetch_ersst,
     "noaa.cpc.oni": fetch_oni,
     CHIRPS_ROUTE: fetch_precipitation,
+    SOLAR_ROUTE: fetch_power_area,
+    TEMPERATURE_ROUTE: fetch_power_area,
+    BATHYMETRY_ROUTE: fetch_bathymetry,
     CHIRPS_DAILY_ROUTE: fetch_precipitation,
     PMRA_ROUTE: fetch_precipitation,
     "usgs.earthquakes": fetch_earthquakes,
@@ -60,6 +66,12 @@ def validate_investigation(investigation):
         sources = investigation["sources"]
         if not 1 <= len(sources) <= 25 or len({s["id"] for s in sources}) != len(sources):
             raise ValueError()
+        years = period.get("years")
+        if years is not None and (not isinstance(years, list) or not 1 <= len(years) <= 25
+                or any(type(year) is not int or not start.year <= year <= end.year for year in years)
+                or len(set(years)) != len(years)
+                or any(source["access"] not in {CHIRPS_ROUTE, PMRA_ROUTE, SOLAR_ROUTE, TEMPERATURE_ROUTE} for source in sources)):
+            raise ValueError()
         for source in sources:
             access = source["access"]
             upstream = source["upstream"]
@@ -84,11 +96,14 @@ def acquire(investigation):
     start, end = (date.fromisoformat(investigation["time"][key]) for key in ("start", "end"))
     if start > end:
         raise ValueError("La fecha inicial debe ser anterior o igual a la final.")
-    monthly_points = [source for source in sources if source["access"] == ROUTE]
+    monthly_points = [source for source in sources if source["access"] == ROUTE and not has_era5_alternative(source)]
     results = fetch_series({**investigation, "sources": monthly_points}) if monthly_points else []
     for source in sources:
         route = source["access"]
-        if route in PUBLIC_ROUTES:
+        if route == ROUTE and has_era5_alternative(source):
+            def fetch(candidate):
+                return fetch_series({**investigation, "sources": [candidate]})[0]
+        elif route in PUBLIC_ROUTES:
             def fetch(candidate):
                 return fetch_public_series(candidate, investigation["time"])
         elif route in SERIES_ROUTES:
@@ -99,7 +114,7 @@ def acquire(investigation):
         if route in ENTITY_ROUTES:
             results.append(fetch_for_selection(source, investigation, start, end, fetch))
         else:
-            result = fetch(source)
+            result = with_best_spatial_resolution(source, investigation, start, end, lambda: fetch(source))
             if route in RASTER_ROUTES and result.get("downloadPath"):
                 try:
                     result = with_grid_map(result, source, investigation, start, end)

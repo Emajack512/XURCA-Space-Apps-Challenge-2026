@@ -4,6 +4,21 @@ function reply(body, status = 200, retryAfter) {
   return Response.json(body, { status, headers });
 }
 
+const api = 'https://generativelanguage.googleapis.com/v1beta';
+const model = 'gemini-3.5-flash-lite';
+
+function runInteraction(prompt, previousInteractionId, key) {
+  return fetch(api + '/interactions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key, 'Api-Revision': '2026-05-20' },
+    signal: AbortSignal.timeout(25_000),
+    body: JSON.stringify({
+      model, input: prompt, store: true,
+      previous_interaction_id: previousInteractionId ?? undefined
+    })
+  });
+}
+
 export default {
   async fetch(request, env) {
     if (request.method !== 'POST') return reply({ error: 'Usar POST' }, 405);
@@ -15,8 +30,12 @@ export default {
       return reply({ error: 'JSON inválido' }, 400);
     }
     const prompt = body?.prompt;
-    if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 30_000) {
-      return reply({ error: 'El prompt debe tener entre 1 y 30.000 caracteres' }, 400);
+    if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 40_000) {
+      return reply({ error: 'El prompt debe tener entre 1 y 40.000 caracteres' }, 400);
+    }
+    const previousId = body.previousInteractionId;
+    if (previousId != null && (typeof previousId !== 'string' || !/^[A-Za-z0-9_-]{1,256}$/.test(previousId))) {
+      return reply({ error: 'Identificador de chat inválido' }, 400);
     }
     if (!env.GEMINI_API_KEY) {
       console.error('Falta el secreto GEMINI_API_KEY');
@@ -24,8 +43,27 @@ export default {
     }
 
     try {
+      if (Object.hasOwn(body, 'previousInteractionId')) {
+        let interaction = await runInteraction(prompt, previousId, env.GEMINI_API_KEY);
+        if (previousId && [400, 404, 410].includes(interaction.status)) {
+          await interaction.body?.cancel();
+          interaction = await runInteraction(prompt, null, env.GEMINI_API_KEY);
+        }
+        if (!interaction.ok) {
+          const status = [429, 503].includes(interaction.status) ? interaction.status : 502;
+          return reply({ error: 'Error de Gemini' }, status, interaction.headers.get('Retry-After'));
+        }
+        const data = await interaction.json();
+        const answer = data.steps?.filter(step => step.type === 'model_output')
+          .flatMap(step => step.content ?? []).filter(part => part.type === 'text')
+          .map(part => part.text ?? '').join('').trim();
+        if (data.status !== 'completed' || !answer || typeof data.id !== 'string') {
+          return reply({ error: 'Respuesta incompleta de Gemini' }, 502);
+        }
+        return reply({ answer, interactionId: data.id });
+      }
       const response = await fetch(
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent',
+        api + `/models/${model}:generateContent`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY },

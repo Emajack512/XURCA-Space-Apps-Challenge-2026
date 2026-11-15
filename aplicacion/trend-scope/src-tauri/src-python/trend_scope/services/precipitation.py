@@ -2,6 +2,7 @@
 
 import math
 import re
+from calendar import monthrange
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from functools import lru_cache
@@ -15,7 +16,7 @@ from rasterio.io import MemoryFile
 from rasterio.windows import Window, from_bounds
 
 from .environmental_series import area_bounds, days, read_text, selected_geometry, series
-from .grid_layers import display_stride
+from .grid_layers import MAX_DISPLAY_CELLS, display_stride, monthly_map_cell_limit
 from .regional_layers import temporal_layer
 
 CHIRPS_ROUTE = "ucsb.chirps.monthly"
@@ -42,26 +43,34 @@ def monthly_assets(route):
             for identifier, month, year in entries if month in PMRA_MONTHS}
 
 
-def read_period(route, url, shape, show_map):
+def read_period(route, url, shape, show_map, cell_limit=MAX_DISPLAY_CELLS):
     if route != PMRA_ROUTE:
         with rasterio.Env(GDAL_DISABLE_READDIR_ON_OPEN="EMPTY_DIR", GDAL_HTTP_CONNECTTIMEOUT="8", GDAL_HTTP_TIMEOUT="25"):
             with rasterio.open(url) as dataset:
-                return read_precipitation(dataset, shape, show_map)
+                return read_grid(dataset, shape, show_map, cell_limit=cell_limit)
     with urlopen(url, timeout=25) as response, MemoryFile(response.read()) as image, image.open() as dataset:
-        return read_precipitation(dataset, shape, show_map)
+        return read_grid(dataset, shape, show_map, cell_limit=cell_limit)
 
 
 def read_precipitation(dataset, shape, show_map, band=1):
+    return read_nonnegative_grid(dataset, shape, show_map, band)
+
+
+def read_nonnegative_grid(dataset, shape, show_map, band=1):
+    return read_grid(dataset, shape, show_map, band)
+
+
+def read_grid(dataset, shape, show_map, band=1, *, minimum=0, cell_limit=MAX_DISPLAY_CELLS):
     transform = dataset.transform
     if dataset.crs != rasterio.crs.CRS.from_epsg(4326) or transform.b or transform.d:
-        raise ValueError("El archivo de precipitación no tiene la grilla geográfica esperada.")
+        raise ValueError("El archivo no tiene la grilla geográfica esperada.")
     if shape["type"] == "Point":
         lon, lat = shape["coordinates"][:2]
         if not (dataset.bounds.left <= lon < dataset.bounds.right and dataset.bounds.bottom < lat <= dataset.bounds.top):
             return None, []
         raw = next(dataset.sample([(lon, lat)], indexes=band, masked=True))[0]
         value = float(raw) * dataset.scales[band - 1] + dataset.offsets[band - 1] if not np.ma.is_masked(raw) else math.nan
-        return (value if math.isfinite(value) and value >= 0 else None), []
+        return (value if math.isfinite(value) and value >= minimum else None), []
 
     west, south, east, north = area_bounds(shape)
     west, south = max(west, dataset.bounds.left), max(south, dataset.bounds.bottom)
@@ -72,29 +81,47 @@ def read_precipitation(dataset, shape, show_map, band=1):
     row, col = max(0, math.floor(window.row_off)), max(0, math.floor(window.col_off))
     height = min(dataset.height, math.ceil(window.row_off + window.height)) - row
     width = min(dataset.width, math.ceil(window.col_off + window.width)) - col
-    window = Window(col, row, width, height)
+    stride = display_stride(height, width, cell_limit) if show_map else 1
+    # Align the block edges to display cells so aggregation never duplicates a cell.
+    block_size = max(stride, (480 // stride) * stride)
+    single_block = height <= block_size and width <= block_size
+    weighted_sum, total, cells = 0.0, 0.0, []
+    for y in range(0, height, block_size):
+        for x in range(0, width, block_size):
+            window = Window(col + x, row + y, min(block_size, width - x), min(block_size, height - y))
+            subtotal, weight, block_cells = summarize_grid_block(
+                dataset, shape, window, band, show_map, stride, single_block, minimum,
+            )
+            weighted_sum += subtotal
+            total += weight
+            cells.extend(block_cells)
+    return (weighted_sum / total if total else None), cells
+
+
+def summarize_grid_block(dataset, shape, window, band, show_map, stride, allow_tiny_fallback, minimum):
     grid = dataset.window_transform(window)
     data = dataset.read(band, window=window, masked=True).astype(float).filled(np.nan)
     values = data * dataset.scales[band - 1] + dataset.offsets[band - 1]
-    valid = np.isfinite(values) & (values >= 0)
+    height, width = values.shape
+    valid = np.isfinite(values) & (values >= minimum)
     touched = geometry_mask([shape], values.shape, grid, invert=True, all_touched=True)
-    scale = 4 if height * width <= 250_000 else 1
-    mask = geometry_mask([shape], (height * scale, width * scale), grid @ grid.scale(1 / scale),
+    if not np.any(touched & valid):
+        return 0.0, 0.0, []
+    mask = geometry_mask([shape], (height * 4, width * 4), grid @ grid.scale(.25),
                          invert=True)
-    fraction = mask.reshape(height, scale, width, scale).mean(axis=(1, 3))
-    if not np.any(fraction):
+    fraction = mask.reshape(height, 4, width, 4).mean(axis=(1, 3))
+    if allow_tiny_fallback and not np.any(fraction):
         fraction = touched
     latitude = grid.f + (np.arange(height) + 0.5) * grid.e
     cos_latitude = np.cos(np.radians(latitude))[:, None]
     weights = fraction * valid * cos_latitude
     clean = np.where(valid, values, 0)
-    total = weights.sum()
-    average = float((clean * weights).sum() / total) if total else None
+    total = float(weights.sum())
+    subtotal = float((clean * weights).sum())
     if not show_map:
-        return average, []
+        return subtotal, total, []
 
-    stride = display_stride(height, width)
-    map_weights = touched * valid * cos_latitude
+    map_weights = weights
     rows, cols = np.arange(0, height, stride), np.arange(0, width, stride)
     totals = np.add.reduceat(np.add.reduceat(map_weights, rows, axis=0), cols, axis=1)
     sums = np.add.reduceat(np.add.reduceat(clean * map_weights, rows, axis=0), cols, axis=1)
@@ -106,7 +133,7 @@ def read_precipitation(dataset, shape, show_map, band=1):
         ring = [[left, bottom], [right, bottom], [right, top], [left, top], [left, bottom]]
         cells.append({"value": float(sums[y, x] / totals[y, x]),
                       "geometry": {"type": "Polygon", "coordinates": [ring]}})
-    return average, cells
+    return subtotal, total, cells
 
 
 def fetch_precipitation(source, investigation, start, end):
@@ -114,7 +141,9 @@ def fetch_precipitation(source, investigation, start, end):
     daily = route == CHIRPS_DAILY_ROUTE
     if daily and (end - start).days >= 366:
         raise ValueError("Elegí hasta 366 días para CHIRPS diario. Cada día requiere leer un ráster del proveedor.")
-    if source["upstream"]["variableId"] != "precipitation":
+    variable = source["upstream"]["variableId"]
+    daily_mean = route == CHIRPS_ROUTE and variable == "precipitation_daily_mean"
+    if variable != "precipitation" and not daily_mean:
         raise ValueError("Este producto ofrece precipitación acumulada.")
     geometry = selected_geometry(source, investigation, {"Point", "Polygon", "MultiPolygon"})
     regional = geometry["type"] != "Point"
@@ -133,6 +162,9 @@ def fetch_precipitation(source, investigation, start, end):
         assets = monthly_assets(route)
         periods = [f"{year:04d}-{month:02d}" for year in range(start.year, end.year + 1) for month in range(1, 13)
                    if str(start)[:7] <= f"{year:04d}-{month:02d}" <= str(end)[:7]]
+    years = investigation.get("time", {}).get("years")
+    if years:
+        periods = [period for period in periods if int(period[:4]) in years]
     if not assets:
         raise ValueError(f"El catálogo de {product} no devolvió archivos.")
     available = [period for period in periods if period in assets]
@@ -143,10 +175,17 @@ def fetch_precipitation(source, investigation, start, end):
     precision = {"yearly": 4, "monthly": 7, "daily": 10}[cadence]
     snapshots = {period[:precision]: period for period in available}
     shown = set(snapshots.values()) if regional else set()
+    cell_limit = monthly_map_cell_limit(len(shown)) if shown else MAX_DISPLAY_CELLS
 
     def load(period):
         try:
-            return read_period(route, assets[period], geometry, period in shown), None
+            value, cells = read_period(route, assets[period], geometry, period in shown, cell_limit)
+            if daily_mean:
+                year, month = map(int, period.split("-"))
+                count = monthrange(year, month)[1]
+                value = value / count if value is not None else None
+                cells = [{**cell, "value": cell["value"] / count} for cell in cells]
+            return (value, cells), None
         except (OSError, URLError, rasterio.errors.RasterioError, ValueError) as error:
             return (None, []), str(error)
 
@@ -166,7 +205,8 @@ def fetch_precipitation(source, investigation, start, end):
         raise ValueError(f"{product} no devolvió celdas válidas para esa selección. Archivos con error: {len(failures)}.")
 
     points = [{"month": period, "value": values.get(period)} for period in periods]
-    result = series(source, provider, product, "mm", points,
+    unit = "mm/día" if daily_mean else "mm"
+    result = series(source, provider, product, unit, points,
                     "Promedio espacial del área" if regional else "Celda del punto seleccionado",
                     catalog, "daily" if daily else "monthly")
     if regional:
@@ -174,7 +214,12 @@ def fetch_precipitation(source, investigation, start, end):
         note = (f"Resolución nativa: {resolution}. Para áreas grandes se agrupan celdas del mapa. "
                 f"El gráfico muestra el promedio espacial de cada {interval} completo.")
         result["map"] = temporal_layer("grid", geometry, start if daily else start.replace(day=1), end, "value",
-                                       events=events, unit="mm", cadence=cadence, note=note, nativeCadence=result["cadence"])
+                                       events=events, unit=unit, cadence=cadence, note=note, nativeCadence=result["cadence"])
+    warnings = []
+    if daily_mean and len(available) < len(periods):
+        warnings.append(f"El catálogo tiene archivos para {len(available)} de {len(periods)} meses solicitados.")
     if failures:
-        result["mapMessage"] = f"No se pudieron leer {len(failures)} de {len(available)} archivos de {product}."
+        warnings.append(f"No se pudieron leer {len(failures)} de {len(available)} archivos de {product}.")
+    if warnings:
+        result["mapMessage"] = " ".join(warnings)
     return result

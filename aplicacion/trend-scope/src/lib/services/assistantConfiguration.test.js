@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import data from '../../../config/cfg_data.json' with { type: 'json' };
 import visual from '../../../config/cfg_visual.json' with { type: 'json' };
-import { configureWorkspace } from './assistantConfiguration.js';
+import { addsToInvestigation, configureWorkspace } from './assistantConfiguration.js';
 import { prepareInvestigation } from './acquisition.js';
 
 const snapshot = () => structuredClone({ data, visual });
@@ -139,6 +139,126 @@ test('a named Argentine locality uses its published boundary', async () => {
 
 test('a polygon does not become a point for a point-only source', async () => {
   await assert.rejects(configureWorkspace(snapshot(), {
-    polygon: ring, sources: [{ id: 'power-temperature' }]
+    polygon: ring, sources: [{ id: 'power-wind' }]
   }, async () => { throw new Error('Must reject before checking provider coverage'); }, 'es'), /selección geográfica/);
+});
+
+test('a named region keeps its country and uses its published boundary for daily mean rain', async () => {
+  const next = await configureWorkspace(snapshot(), {
+    place: { name: 'Asunción, Paraguay', kind: 'regiones' },
+    time: { start: '2024-11-01', end: '2026-10-31' },
+    sources: [{ id: 'chirps-mean-daily-rain' }]
+  }, async (command, args) => {
+    if (command === 'search_places') {
+      assert.equal(args.query, 'Asunción, Paraguay');
+      return JSON.stringify([{ id: 'asuncion', name: 'Asunción', country: 'Paraguay', coordinates: [-57.6, -25.3] }]);
+    }
+    if (command === 'load_place_boundary') return polygon;
+    assert.equal(command, 'evaluate_coverage');
+    assert.equal(args.scope, 'area');
+    return { matches: [{ access: 'ucsb.chirps.monthly', variables: ['precipitation_daily_mean'], status: 'unverified', cadence: 'monthly' }] };
+  }, 'es');
+  const source = next.data.sources[0];
+  const feature = next.data.geography.selection.features.find(item => item.id === source.upstream.geometryId);
+  assert.equal(next.data.geography.scope, 'area');
+  assert.deepEqual(feature.geometry, polygon);
+});
+
+test('the assistant separates named years for a country boundary', async () => {
+  const next = await configureWorkspace(snapshot(), {
+    place: { name: 'Madagascar', kind: 'paises' },
+    sources: [{ id: 'chirps-monthly-precipitation' }],
+    time: { years: [2006, 2000] }
+  }, async command => {
+    if (command === 'search_places') return JSON.stringify([{ id: 'MDG', name: 'Madagascar', coordinates: [47, -19] }]);
+    if (command === 'load_place_boundary') return polygon;
+    return { matches: [{ access: 'ucsb.chirps.monthly', variables: ['precipitation'], status: 'compatible', cadence: 'monthly' }] };
+  }, 'es');
+  assert.deepEqual(next.data.time.years, [2000, 2006]);
+  assert.equal(next.data.time.start, '2000-01-01');
+  assert.equal(next.data.time.end, '2006-12-31');
+  assert.equal(next.data.geography.scope, 'area');
+});
+
+
+test('a temperature query bound to a polygon uses the regional adapter', async () => {
+  const next = await configureWorkspace(snapshot(), {
+    polygon: ring, sources: [{ id: 'power-temperature' }],
+    time: { start: '2025-01-01', end: '2025-12-31' }
+  }, async (command, args) => {
+    assert.equal(command, 'evaluate_coverage');
+    assert.equal(args.scope, 'area');
+    return { matches: [{ access: 'nasa.power.temperature.area', variables: ['T2M'], status: 'compatible', cadence: 'monthly' }] };
+  }, 'es');
+  assert.equal(next.data.sources[0].id, 'power-temperature-area');
+});
+
+test('Tucumán stays a provincial temperature query when the year changes', async () => {
+  const invoke = async (command, args) => {
+    if (command === 'search_places') {
+      assert.deepEqual(args, { query: 'Tucumán', kind: 'provincias', language: 'es' });
+      return JSON.stringify([{ id: '90', name: 'Tucumán', province: 'Tucumán', country: 'Argentina', coordinates: [-65.3, -26.8] }]);
+    }
+    if (command === 'load_place_boundary') {
+      assert.deepEqual(args, { kind: 'provincias', id: '90' });
+      return { type: 'Polygon', coordinates: [ring] };
+    }
+    assert.equal(command, 'evaluate_coverage');
+    assert.equal(args.scope, 'area');
+    return { matches: [{ access: 'nasa.power.temperature.area', variables: ['T2M'], status: 'unverified', cadence: 'monthly' }] };
+  };
+  const first = await configureWorkspace(snapshot(), {
+    place: { name: 'Tucumán', kind: 'provincias' }, sources: [{ id: 'power-temperature-area' }],
+    time: { start: '2025-01-01', end: '2025-12-31' }
+  }, invoke, 'es');
+  const next = await configureWorkspace(first, {
+    time: { start: '2024-01-01', end: '2024-12-31' }
+  }, invoke, 'es');
+  const request = prepareInvestigation(next.data);
+  assert.equal(request.time.start, '2024-01-01');
+  assert.equal(request.time.end, '2024-12-31');
+  assert.deepEqual(next.data.geography, first.data.geography);
+  assert.deepEqual(next.data.sources, first.data.sources);
+});
+
+test('an offshore comparison resolves both shores and keeps its requested distance', async () => {
+  const coast = { countries: ['España', 'Portugal'], territory: 'mainland', side: 'sea', distanceKm: 50, waters: 'Atlántico' };
+  const result = await configureWorkspace(snapshot(), { coast, sources: [{ id: 'etopo-bathymetry' }] }, async (command, args) => {
+    if (command === 'load_coastal_regions') {
+      assert.deepEqual(args, coast);
+      return coast.countries.map((name, index) => ({ name, geometry: { type: 'Polygon',
+        coordinates: [ring.map(([x, y]) => [x + index, y])] } }));
+    }
+    assert.equal(command, 'evaluate_coverage');
+    assert.equal(args.scope, 'area');
+    return { matches: [{ access: 'noaa.etopo.area', variables: ['depth'], status: 'compatible', cadence: 'static' }] };
+  }, 'es');
+  const features = result.data.geography.selection.features;
+  assert.deepEqual(features.map(feature => feature.properties.coastDistanceKm), [50, 50]);
+  assert.deepEqual(result.data.sources.map(source => source.upstream.geometryId), features.map(feature => feature.id));
+});
+
+test('an additive place keeps the previous series even if the proposal tries to replace it', async () => {
+  const initial = snapshot();
+  const invoke = async (command, args) => {
+    if (command === 'search_places') {
+      return JSON.stringify([{ id: args.query, name: args.query, coordinates: [-65, -30] }]);
+    }
+    if (command === 'load_place_boundary') return { type: 'Polygon', coordinates: [
+      ring.map(([x, y]) => [x + (args.id === 'Jamaica' ? 0 : 2), y])
+    ] };
+    assert.equal(command, 'evaluate_coverage');
+    return { matches: [rainfall] };
+  };
+  const source = { id: 'chirps-monthly-precipitation' };
+  const first = await configureWorkspace(initial, { place: { kind: 'paises', name: 'Jamaica' }, sources: [source] }, invoke, 'es');
+  const changes = { place: { kind: 'paises', name: 'Filipinas' }, clearSelection: true };
+  const additive = addsToInvestigation('Y Filipinas también.');
+  const next = await configureWorkspace(first, changes, invoke, 'es', additive);
+  assert.equal(additive, true);
+  assert.equal(addsToInvestigation('En vez de Jamaica, solo Filipinas'), false);
+  assert.equal(next.data.sources.length, 2);
+  assert.ok(next.data.sources.some(item => item.id === first.data.sources[0].id));
+  assert.deepEqual(new Set(next.data.sources.map(item => item.upstream.geometryId)),
+    new Set(next.data.geography.selection.features.map(item => item.id)));
 });

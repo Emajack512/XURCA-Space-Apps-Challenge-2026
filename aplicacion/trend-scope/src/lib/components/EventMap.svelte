@@ -1,4 +1,6 @@
 <script>
+  import { on } from 'svelte/events';
+  import { Expand, Minimize, Minus, Plus, RotateCcw } from '@lucide/svelte';
   import { geoMercator, geoPath } from 'd3-geo';
   import { feature } from 'topojson-client';
   import atlas from 'world-atlas/countries-110m.json';
@@ -13,6 +15,12 @@
   let selected = $state(null);
   let width = $state(0);
   let height = $state(0);
+  let expanded = $state(false);
+  let zoomFactor = $state(1);
+  let offset = $state({ x: 0, y: 0 });
+  let dragging = $state(false);
+  let pointer;
+  let reliefReady = $state(null);
   let reliefLoaded = $state('');
   let heatmap = $state(null);
   const land = feature(atlas, atlas.objects.land);
@@ -53,6 +61,11 @@
 
   let precision = $derived({ daily: 10, monthly: 7, yearly: 4 }[layer.cadence]);
   let windows = $derived.by(() => {
+    if (layer.periods?.length) return layer.periods.map(start => {
+      const last = new Date(start + 'T00:00:00Z');
+      last.setUTCMonth(last.getUTCMonth() + 1, 0);
+      return { key: start.slice(0, precision), start, end: last.toISOString().slice(0, 10) };
+    });
     const first = new Date(layer.start + 'T00:00:00Z');
     const last = new Date(layer.end + 'T00:00:00Z');
     if (precision === 4) first.setUTCMonth(0, 1);
@@ -88,15 +101,27 @@
     }
     return result;
   });
+  $effect(() => {
+    if (layer.kind !== 'events') return;
+    const firstObserved = windows.findIndex(period => groups.has(period.key));
+    frame = Math.max(0, firstObserved);
+  });
   let window = $derived(windows[frame] ?? windows[0]);
   let stationWindows = $derived(layer.stationSurface ? stationSnapshots(layer.events, precision) : null);
   let snapshot = $derived(stationWindows?.get(window?.key));
   let events = $derived(snapshot?.events ?? groups.get(window?.key) ?? []);
-  let projection = $derived.by(() => {
+  let fittedProjection = $derived.by(() => {
     const polygons = layer.area.type === 'Polygon' ? [layer.area.coordinates] : layer.area.coordinates;
     const bounds = polygons.flatMap(polygon => polygon[0]);
     return geoMercator().fitExtent([[18, 18], [Math.max(width - 18, 19), Math.max(height - 18, 19)]],
-      { type: 'MultiPoint', coordinates: bounds }).clipExtent([[0, 0], [width, height]]);
+      { type: 'MultiPoint', coordinates: bounds });
+  });
+  let projection = $derived.by(() => {
+    const [x, y] = fittedProjection.translate();
+    return geoMercator().scale(fittedProjection.scale() * zoomFactor)
+      .translate([width / 2 + (x - width / 2) * zoomFactor + offset.x,
+                  height / 2 + (y - height / 2) * zoomFactor + offset.y])
+      .clipExtent([[0, 0], [width, height]]);
   });
   let projected = $derived(events.map(event => {
     const coordinates = event.coordinates ?? (event.geometry?.type === 'Point' ? event.geometry.coordinates : null);
@@ -139,6 +164,72 @@
              x: left, y: top, width: right - left, height: bottom - top };
   });
 
+  $effect(() => {
+    const image = relief;
+    const timer = setTimeout(() => { reliefReady = image; }, 240);
+    return () => clearTimeout(timer);
+  });
+
+  function panTo(x, y, factor = zoomFactor) {
+    const [originX, originY] = fittedProjection([0, 0]);
+    const limit = Math.PI * fittedProjection.scale();
+    const clamp = (value, origin, size) => Math.max((size / 2 - origin - limit) * factor,
+      Math.min((size / 2 - origin + limit) * factor, value));
+    offset = { x: clamp(x, originX, width), y: clamp(y, originY, height) };
+  }
+
+  function zoomBy(amount) {
+    const next = Math.max(.5, Math.min(16, zoomFactor * amount));
+    panTo(offset.x * next / zoomFactor, offset.y * next / zoomFactor, next);
+    zoomFactor = next;
+  }
+
+  function resetView() {
+    offset = { x: 0, y: 0 };
+    zoomFactor = 1;
+  }
+
+  function mapWheel(node) {
+    const destroy = on(node, 'wheel', event => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      event.preventDefault();
+      zoomBy(event.deltaY < 0 ? 1.2 : 1 / 1.2);
+    }, { passive: false });
+    return { destroy };
+  }
+
+  function startPan(event) {
+    if (event.button !== 0 || pointer) return;
+    pointer = { id: event.pointerId, x: event.clientX, y: event.clientY, offset };
+  }
+
+  function movePan(event) {
+    if (pointer?.id !== event.pointerId) return;
+    const dx = event.clientX - pointer.x;
+    const dy = event.clientY - pointer.y;
+    if (!dragging && Math.hypot(dx, dy) < 5) return;
+    if (!dragging) event.currentTarget.setPointerCapture(pointer.id);
+    dragging = true;
+    panTo(pointer.offset.x + dx, pointer.offset.y + dy);
+  }
+
+  function endPan(event) {
+    if (pointer?.id !== event.pointerId) return;
+    pointer = null;
+    dragging = false;
+  }
+
+  function mapKeys(event) {
+    const arrows = { ArrowLeft: [75, 0], ArrowRight: [-75, 0], ArrowUp: [0, 75], ArrowDown: [0, -75] };
+    const move = arrows[event.key];
+    if (move) panTo(offset.x + move[0], offset.y + move[1]);
+    else if (event.key === '+' || event.key === '=') zoomBy(1.5);
+    else if (event.key === '-') zoomBy(1 / 1.5);
+    else if (event.key === 'Home') resetView();
+    else return;
+    event.preventDefault();
+  }
+
   function color(event) {
     if (count) return colors[0];
     const value = event[layer.field];
@@ -157,19 +248,23 @@
   }
 </script>
 
+<svelte:window onkeydown={event => { if (event.key === 'Escape') expanded = false; }}/>
 <section class="event-map" aria-label={label}>
   {#if layer.label}<strong>{layer.label}</strong>{/if}
-  <div class="event-map-viewport" bind:clientWidth={width} bind:clientHeight={height}>
-    <svg {width} {height} aria-label={$translate('Mapa de eventos')} role="group">
+  <div class="event-map-viewport" class:expanded class:dragging bind:clientWidth={width} bind:clientHeight={height} use:mapWheel>
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions (The map implements keyboard pan, zoom and reset.) -->
+    <svg {width} {height} aria-label={$translate('Mapa de eventos')} role="application" tabindex="0"
+      onkeydown={mapKeys} onpointerdown={startPan} onpointermove={movePan} onpointerup={endPan}
+      onpointerleave={event => { if (!dragging) endPan(event); }} onpointercancel={endPan} onlostpointercapture={endPan}>
       <path d={landPath} class="event-map-land"/>
-      {#if relief}
+      {#if relief && reliefReady?.url === relief.url}
         {#key relief.url}
           {@const url = relief.url}
           <image href={url} x={relief.x} y={relief.y} width={relief.width} height={relief.height}
             preserveAspectRatio="none" opacity="0.8" aria-hidden="true" onload={() => reliefLoaded = url}/>
         {/key}
       {/if}
-      <path d={outline} class="event-map-area"/>
+      {#if !layer.pointView}<path d={outline} class="event-map-area"/>{/if}
       <defs><clipPath id={clipId}><path d={outline} clip-rule="evenodd"/></clipPath></defs>
       {#if heatmap}
         <image href={heatmap} x="0" y="0" {width} {height} preserveAspectRatio="none"
@@ -195,9 +290,17 @@
         {/if}
       {/each}
     </svg>
-    {#if width && height && mapCenter?.every(Number.isFinite) && mapZoom >= 0 && mapZoom <= 22 && Math.abs(mapCenter[1]) <= 85}
+    {#if width && height && mapCenter?.every(Number.isFinite) && mapZoom >= -2 && mapZoom <= 22 && Math.abs(mapCenter[1]) <= 85}
       <RegionalPlaceLabels center={mapCenter} zoom={mapZoom} {width} {height}/>
     {/if}
+    <div class="map-navigation">
+      <button type="button" onclick={() => zoomBy(1.5)} aria-label={$translate('Acercar')} title={$translate('Acercar')}><Plus size={16}/></button>
+      <button type="button" onclick={() => zoomBy(1 / 1.5)} aria-label={$translate('Alejar')} title={$translate('Alejar')}><Minus size={16}/></button>
+      <button type="button" onclick={resetView} aria-label={$translate('Restablecer vista')} title={$translate('Restablecer vista')}><RotateCcw size={16}/></button>
+      <button type="button" onclick={() => expanded = !expanded} aria-label={$translate(expanded ? 'Reducir mapa' : 'Ampliar mapa')} title={$translate(expanded ? 'Reducir mapa' : 'Ampliar mapa')} aria-pressed={expanded}>
+        {#if expanded}<Minimize size={16}/>{:else}<Expand size={16}/>{/if}
+      </button>
+    </div>
     <details class="map-credits">
       <summary aria-label={$translate('Créditos del mapa')} title={$translate('Créditos del mapa')}>ⓘ</summary>
       <div>
@@ -223,8 +326,9 @@
       <span><i style:background={entry.color}></i>{entry.label}</span>
     {/each}
   </div>
+  {#if layer.note}<small class="quiet">{layer.note}</small>{/if}
   <label class="event-map-time">
-    <span>{$translate('Fecha del mapa')} ·
+    <span>{$translate(layer.static ? 'Modelo estático' : 'Fecha del mapa')} ·
       {#if layer.kind === 'grid' && layer.cadence === 'yearly' && events.length}
         {events[0].date.slice(0, 7)}
       {:else if layer.kind === 'grid' && layer.nativeCadence === 'daily' && layer.cadence !== 'daily' && events.length}
@@ -266,6 +370,11 @@
 </section>
 
 <style>
+  .event-map-viewport.expanded { position:fixed; inset:12px; height:auto; z-index:100; box-shadow:0 0 0 12px var(--bg); }
+  .event-map-viewport svg { touch-action:none; cursor:grab; }
+  .event-map-viewport.dragging svg { cursor:grabbing; }
+  .map-navigation { position:absolute; top:.5rem; right:.5rem; display:flex; gap:4px; }
+  .map-navigation button { display:grid; place-items:center; min-width:2rem; min-height:2rem; background:var(--panel); }
   .map-credits {position:absolute;right:.5rem;bottom:.5rem;text-align:right}
   .map-credits summary {list-style:none;cursor:pointer;background:var(--panel,#101a28);padding:.2rem .45rem;border-radius:4px}
   .map-credits div {position:absolute;right:0;bottom:100%;width:max-content;max-width:min(75vw,24rem);padding:.4rem;background:var(--panel,#101a28)}

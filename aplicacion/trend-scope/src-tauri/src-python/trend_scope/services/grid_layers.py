@@ -155,8 +155,15 @@ def category_labels(variable):
     return {f"{value:g}": name.replace("_", " ") for value, name in zip(values, names)} if names else {}
 
 
-def display_stride(rows, cols):
-    return max(1, math.ceil(math.sqrt(rows * cols / MAX_DISPLAY_CELLS)))
+def monthly_map_cell_limit(frame_count):
+    return max(MAX_DISPLAY_CELLS, min(6000, 72_000 // max(1, frame_count)))
+
+
+def display_stride(rows, cols, cell_limit=MAX_DISPLAY_CELLS):
+    stride = max(1, math.ceil(math.sqrt(rows * cols / cell_limit)))
+    while math.ceil(rows / stride) * math.ceil(cols / stride) > cell_limit:
+        stride += 1
+    return stride
 
 
 def valid_pixels(values):

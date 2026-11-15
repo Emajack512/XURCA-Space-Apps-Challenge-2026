@@ -42,7 +42,9 @@
       if (disposed) return;
       map = new Map({
         container, style, center, zoom, interactive: false, attributionControl: false,
-        renderWorldCopies: false, fadeDuration: 0
+        renderWorldCopies: false, fadeDuration: 0, minZoom: -2,
+        // The SVG already fits the camera. MapLibre must use that same center and scale.
+        transformConstrain: (center, zoom) => ({ center, zoom })
       });
     }).catch(() => { /* Relief remains visible when the labels are unavailable. */ });
     return () => {

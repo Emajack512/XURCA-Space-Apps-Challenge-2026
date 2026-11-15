@@ -74,6 +74,29 @@ def result_for_download(source, provider, product, path, url, count, geometry):
     return {**result, "downloadPath": str(path), "message": f"Descarga completada. Archivos originales: {count}."}
 
 
+def search_collections(keyword):
+    searches = [
+        ("NASA Earthdata", "https://cmr.earthdata.nasa.gov/search/collections.json",
+         {"keyword": keyword, "page_size": 5, "has_granules": "true"}, "title"),
+        ("USGS ScienceBase", "https://www.sciencebase.gov/catalog/items",
+         {"q": keyword, "format": "json", "max": 5}, "title"),
+    ]
+    attempts = []
+    for provider, url, params, title_key in searches:
+        try:
+            payload, _ = request_json(url, provider, **params)
+        except ValueError:
+            attempts.append({"provider": provider, "status": "unavailable"})
+            continue
+        entries = payload.get("feed", {}).get("entry", []) if provider == "NASA Earthdata" else payload.get("items", [])
+        results = [{"id": item["id"], "title": item[title_key][:300], "provider": provider}
+                   for item in entries[:5] if item.get("id") and item.get(title_key)]
+        attempts.append({"provider": provider, "status": "found" if results else "empty"})
+        if results:
+            return {"attempts": attempts, "collections": results}
+    return {"attempts": attempts, "collections": []}
+
+
 def fetch_earthdata(source, investigation, start, end):
     provider = "NASA Earthdata"
     upstream = source["upstream"]

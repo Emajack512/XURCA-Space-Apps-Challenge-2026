@@ -193,8 +193,8 @@
 
 {#snippet time()}
   <div class="field-pair">
-    <label>{$translate("Desde")}<input type="date" value={data.time.start} oninput={event => set('time','start',event.currentTarget.value)}/></label>
-    <label>{$translate("Hasta")}<input type="date" value={data.time.end} oninput={event => set('time','end',event.currentTarget.value)}/></label>
+    <label>{$translate("Desde")}<input type="date" value={data.time.start} oninput={event => editData(next => { next.time.start = event.currentTarget.value; delete next.time.years; })}/></label>
+    <label>{$translate("Hasta")}<input type="date" value={data.time.end} oninput={event => editData(next => { next.time.end = event.currentTarget.value; delete next.time.years; })}/></label>
   </div>
   <small>{$translate("La frecuencia y la cobertura dependen del producto seleccionado.")}</small>
 {/snippet}

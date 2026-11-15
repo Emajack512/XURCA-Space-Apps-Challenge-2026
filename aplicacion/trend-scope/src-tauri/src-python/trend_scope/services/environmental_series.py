@@ -8,7 +8,7 @@ from urllib.parse import urlencode, urlparse
 from urllib.request import Request, urlopen
 
 from .public_sources import number, request_json
-from .regional_layers import temporal_layer
+from .regional_layers import spatial_blocks, temporal_layer
 
 
 OISST = "https://psl.noaa.gov/thredds/ncss/grid/Datasets/noaa.oisst.v2.highres/"
@@ -203,37 +203,65 @@ def fetch_tide_gauge(source, investigation, start, end):
                   points, f"Estación {identifier}", url, "monthly")
 
 
+def earthquake_window(params, first, last):
+    def timestamp(value):
+        return datetime.fromtimestamp(value / 1000, timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+    payload, _ = request_json(USGS, "USGS", **params, starttime=timestamp(first), endtime=timestamp(last))
+    events = payload["features"]
+    if len(events) < params["limit"]:
+        return events
+    if first == last:
+        raise ValueError("USGS alcanzó su límite de eventos para un mismo instante.")
+    midpoint = (first + last) // 2
+    return earthquake_window(params, first, midpoint) + earthquake_window(params, midpoint + 1, last)
+
+
 def fetch_earthquakes(source, investigation, start, end):
+    from concurrent.futures import ThreadPoolExecutor
+
     geometry = selected_geometry(source, investigation, {"Polygon", "MultiPolygon"})
-    west, south, east, north = area_bounds(geometry)
-    params = {"minlongitude": west, "minlatitude": south, "maxlongitude": east, "maxlatitude": north,
-              "starttime": f"{start}T00:00:00Z", "endtime": f"{end}T23:59:59.999Z", "format": "geojson",
-              "eventtype": "earthquake", "orderby": "time-asc", "limit": 10000}
+    blocks = spatial_blocks(geometry, area_bounds(geometry))
+    params = {"format": "geojson", "eventtype": "earthquake", "orderby": "time-asc", "limit": 10000}
     min_magnitude = source["upstream"]["selectors"].get("minMagnitude")
     if min_magnitude:
         params["minmagnitude"] = float(min_magnitude)
-    totals = {}
-    events = []
-    offset = 1
-    while True:
-        payload, _ = request_json(USGS, "USGS", **params, offset=offset)
-        page = payload["features"]
-        for item in page:
-            lon, lat, depth = item["geometry"]["coordinates"]
-            if not inside_area(lon, lat, geometry):
-                continue
-            stamp = datetime.fromtimestamp(item["properties"]["time"] / 1000, tz=timezone.utc).isoformat()
-            day = stamp[:10]
-            totals[day] = totals.get(day, 0) + 1
-            props = item["properties"]
-            events.append({
-                "id": item["id"], "coordinates": [lon, lat], "date": stamp,
-                "magnitude": props["mag"], "magnitudeType": props.get("magType"),
-                "depth": depth, "location": props.get("place"), "quality": props.get("status"),
-            })
-        if len(page) < params["limit"]:
-            break
-        offset += len(page)
+    first = int(datetime.fromisoformat(f"{start}T00:00:00+00:00").timestamp() * 1000)
+    last = int(datetime.fromisoformat(f"{end}T23:59:59+00:00").timestamp() * 1000) + 999
+    polygons = [geometry["coordinates"]] if geometry["type"] == "Polygon" else geometry["coordinates"]
+    candidates = [(area_bounds({"type": "Polygon", "coordinates": polygon}), polygon) for polygon in polygons]
+
+    def read_block(bounds):
+        west, south, east, north = bounds
+        query = {**params, "minlongitude": float(west),
+                 "minlatitude": float(south), "maxlongitude": float(east), "maxlatitude": float(north)}
+        return earthquake_window(query, first, last)
+
+    def inside(lon, lat):
+        return any(west <= lon <= east and south <= lat <= north
+                   and inside_ring(lon, lat, polygon[0])
+                   and not any(inside_ring(lon, lat, hole) for hole in polygon[1:])
+                   for (west, south, east, north), polygon in candidates)
+
+    totals, unique = {}, {}
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        for page in pool.map(read_block, blocks):
+            for item in page:
+                if item["id"] in unique:
+                    continue
+                lon, lat, depth = item["geometry"]["coordinates"]
+                if not inside(lon, lat):
+                    continue
+                props = item["properties"]
+                stamp = datetime.fromtimestamp(props["time"] / 1000, tz=timezone.utc).isoformat()
+                day = stamp[:10]
+                totals[day] = totals.get(day, 0) + 1
+                unique[item["id"]] = {
+                    "id": item["id"], "coordinates": [lon, lat], "date": stamp,
+                    "magnitude": props["mag"], "magnitudeType": props.get("magType"),
+                    "depth": depth, "location": props.get("place"), "quality": props.get("status"),
+                }
+    events = sorted(unique.values(), key=lambda event: (event["date"], event["id"]))
     field = source["upstream"]["variableId"]
     if field == "count":
         values = [{"month": day, "value": totals.get(day, 0)} for day in days(start, end)]
@@ -243,5 +271,6 @@ def fetch_earthquakes(source, investigation, start, end):
         unit, cadence = ("magnitud" if field == "magnitude" else "km"), "event"
     result = series(source, "USGS", "ComCat", unit, values, "Polígono", USGS, cadence)
     result["map"] = temporal_layer("events", geometry, start, end, field, events=events,
-                                   minimumMagnitude=params.get("minmagnitude"), eventType="earthquake")
+                                   minimumMagnitude=params.get("minmagnitude"), eventType="earthquake",
+                                   note=f"{len(blocks)} bloque(s) de búsqueda, unidos por identificador USGS.")
     return result

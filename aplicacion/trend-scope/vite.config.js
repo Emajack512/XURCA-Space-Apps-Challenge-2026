@@ -15,7 +15,7 @@ export default defineConfig(async () => ({
     strictPort: true,
     watch: {
       // Rust writes locked executables in the workspace-level target directory on Windows.
-      ignored: ["**/src-tauri/**", "**/target/**", "**/.venv/**"],
+      ignored: ["**/src-tauri/pyembed/**", "**/target/**", "**/.venv/**", "**/__pycache__/**"],
     },
   },
 }));

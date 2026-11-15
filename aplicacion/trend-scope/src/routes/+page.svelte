@@ -1,10 +1,11 @@
 <script>
+  import { shouldRetryAssistant, waitForAssistantRetry } from '$lib/services/assistantRetry.js';
   import { chartCadences, chartResolutions } from '$lib/services/charts.js';
   import { saveChartImage } from '$lib/services/chartExport.js';
   import { catalog } from '$lib/services/sources.js';
   import { translate } from '$lib/services/i18n.js';
   import { onMount, tick } from 'svelte';
-  import { Earth, Aperture, Bot, ChevronDown, CircleHelp, Crosshair, FlaskConical, Hand, MapPin, Play, Hexagon, Settings, Settings2, Trash2, X, Save, FolderOpen } from '@lucide/svelte';
+  import { Earth, Aperture, Bot, Eraser, ChevronDown, CircleHelp, Crosshair, FlaskConical, Hand, MapPin, Play, Hexagon, Settings, Settings2, Trash2, X, Save, FolderOpen } from '@lucide/svelte';
   import WorldMap from '$lib/components/WorldMap.svelte';
   import Globe from '$lib/components/Globe.svelte';
   import SettingsPanel from '$lib/components/Settings.svelte';
@@ -40,14 +41,37 @@
   let result = $state(null);
   let chartId = $state(null);
   let analysisView = $state(false);
+  let acquisitionGeneration = 0;
+  let regionReset = $state(0);
   let savedConfig = $state('');
   let storageBusy = $state(true);
   let panels = $derived($workspace.visual.workspace);
   let mapVisible = $derived(panels.map !== false);
   let assistantVisible = $derived(panels.assistantVisible !== false);
   let currentSeries = $derived(result?.key === configKey ? result.series : []);
+  const mapTab = 'regional-result-map';
+  let mapSeries = $derived(currentSeries.flatMap(item => {
+    if (item.map) return [item];
+    const location = item.coordinates;
+    if (!Array.isArray(location) || location.length !== 2 || !location.every(Number.isFinite)) return [];
+    const events = item.points.filter(point => Number.isFinite(point.value))
+      .map(point => ({ date: point.month, value: point.value, coordinates: location, entityId: item.id }));
+    if (!events.length) return [];
+    const [lon, lat] = location;
+    const west = Math.max(-180, lon - 1), east = Math.min(180, lon + 1);
+    const south = Math.max(-89.9, Math.min(89.8, lat - 1)), north = Math.min(89.9, Math.max(-89.8, lat + 1));
+    return [{ ...item, map: { kind: 'entities', field: 'value', pointView: true, events,
+      cadence: item.cadence === 'monthly' || events.length > 93 ? 'monthly' : 'daily',
+      start: events[0].date.slice(0, 10), end: events.at(-1).date.slice(0, 10),
+      area: { type: 'Polygon', coordinates: [[[west, south], [east, south], [east, north], [west, north], [west, south]]] }
+    } }];
+  }));
+  let hasRegionalMaps = $derived(mapSeries.some(item => !item.map.pointView));
+  let mapSeriesId = $state(null);
+  let selectedMap = $derived(mapSeries.find(item => item.id === mapSeriesId) ?? mapSeries[0]);
+  let activeMap = $derived(chartId === mapTab && !!selectedMap);
   let activeChart = $derived(currentSeries.find(item => item.id === chartId));
-  let analysisVisible = $derived(analysisView && !activeChart);
+  let analysisVisible = $derived(analysisView && !activeChart && !activeMap);
   let exportableSeries = $derived(currentSeries.filter(item => item.points.some(point => point.value !== null)));
   let exportId = $state('');
   let exporting = $state(false);
@@ -111,7 +135,33 @@
     }
   }
   function chooseTool(id) { tool = id; vertices = []; if (notice === openPolygonNotice) notice = ''; }
-  function clearSelection() { vertices = []; if (notice === openPolygonNotice) notice = ''; editData(data => data.geography.selection.features = []); }
+  function removeMapSelections(shouldRemove) {
+    vertices = [];
+    regionReset++;
+    if (notice === openPolygonNotice) notice = '';
+    editData(data => {
+      const features = data.geography.selection.features;
+      const removed = new Set(features.filter(shouldRemove).map(feature => feature.id));
+      data.geography.selection.features = features.filter(feature => !removed.has(feature.id));
+      for (const source of data.sources) {
+        if (removed.has(source.upstream?.geometryId)) source.upstream.geometryId = null;
+      }
+    });
+  }
+  function clearSelection() { removeMapSelections(() => true); }
+  function clearRegions() { removeMapSelections(feature => ['Polygon', 'MultiPolygon'].includes(feature.geometry.type)); }
+
+  function clearChatResults() {
+    acquisitionGeneration++;
+    analysisView = false;
+    running = false;
+    result = null;
+    chartId = null;
+    mapSeriesId = null;
+    acquisitionError = null;
+    notice = '';
+    if (modal === 'chart-export' && dialog?.open) dialog.close();
+  }
   function buildInvestigation() {
     try {
       return prepareInvestigation($workspace.data);
@@ -123,19 +173,30 @@
 
   function openAnalysis() { chartId = null; analysisView = true; }
 
-  async function run({ showChart = true } = {}) {
+  async function run({ showChart = true, retry = false } = {}) {
     if (running || storageBusy) return;
     const investigation = buildInvestigation();
     if (!investigation) return;
     analysisView = false;
     const startedWith = configKey;
+    const generation = ++acquisitionGeneration;
     running = true;
     acquisitionError = null;
     result = null;
     chartId = null;
     notice = '';
     try {
-      const acquired = await acquireData(investigation);
+      let acquired;
+      try {
+        acquired = await acquireData(investigation);
+      } catch (error) {
+        if (generation !== acquisitionGeneration) return;
+        if (!retry || !shouldRetryAssistant(error) || startedWith !== configKey) throw error;
+        await waitForAssistantRetry();
+        if (generation !== acquisitionGeneration || startedWith !== configKey) return;
+        acquired = await acquireData(investigation);
+      }
+      if (generation !== acquisitionGeneration) return;
       const sources = new Map(investigation.sources.map(source => [source.id, source]));
       const features = new Map(investigation.geography.selection.features.map(feature => [feature.id, feature]));
       const series = acquired.map(item => {
@@ -152,11 +213,12 @@
       result = { key: startedWith, series };
       if (showChart && startedWith === configKey) chartId = series[0]?.id ?? null;
     } catch (error) {
+      if (generation !== acquisitionGeneration) return;
       const message = String(error.message ?? error);
       acquisitionError = { key: startedWith, message };
       notify(message);
     } finally {
-      running = false;
+      if (generation === acquisitionGeneration) running = false;
     }
   }
   async function save() {
@@ -291,6 +353,7 @@
         <button class="tool-button" class:active={id === tool} aria-pressed={id === tool} title={$translate(label)} aria-label={$translate(label)} onclick={() => chooseTool(id)}><Icon size={17}/></button>
       {/each}
       <button class="tool-button" title={$translate("Limpiar selecciones")} aria-label={$translate("Limpiar selecciones")} onclick={clearSelection}><Trash2 size={16}/></button>
+      <button class="tool-button" title={$translate("Limpiar regiones")} aria-label={$translate("Limpiar regiones")} onclick={clearRegions}><Eraser size={16}/></button>
     </div>
     <div class="panel-buttons">
       <button class="tool-button" class:active={mapVisible} aria-pressed={mapVisible}
@@ -300,10 +363,13 @@
       <button class="tool-button" class:active={assistantVisible} aria-pressed={assistantVisible} title={$translate("Asistente de IA")} aria-label={$translate("Alternar asistente")} onclick={() => togglePanel('assistantVisible', !assistantVisible)}><Bot size={17}/></button>
     </div>
     <div class="view-tabs" role="group" aria-label={$translate('Vistas de la consulta')}>
-      <button class:active={!activeChart && !analysisVisible} aria-pressed={!activeChart && !analysisVisible} onclick={() => { chartId = null; analysisView = false; }}>{$translate('Espacio de trabajo')}</button>
+      <button class:active={!activeChart && !activeMap && !analysisVisible} aria-pressed={!activeChart && !activeMap && !analysisVisible} onclick={() => { chartId = null; analysisView = false; }}>{$translate('Espacio de trabajo')}</button>
       <button class="tool-button" class:active={analysisVisible} aria-pressed={analysisVisible}
         title={$translate('Análisis estadístico')} aria-label={$translate('Análisis estadístico')}
         onclick={openAnalysis}><FlaskConical size={17}/></button>
+      {#if mapSeries.length}
+        <button class:active={activeMap} aria-pressed={activeMap} onclick={() => chartId = mapTab}>{$translate(hasRegionalMaps ? 'Mapa coroplético' : 'Mapa de datos')}</button>
+      {/if}
       {#each currentSeries as item (item.id)}
         {@const label = $translate(catalog.find(source => source.id === item.id.split('::')[0])?.label ?? item.label ?? item.variable)}
         <button class:active={activeChart?.id === item.id} aria-pressed={activeChart?.id === item.id} title={item.placeLabel ? item.placeLabel + ' · ' + label : label} onclick={() => chartId = item.id}><span>{item.placeLabel ?? label}{item.placeLabel && currentSeries.some(other => other.id !== item.id && other.placeLabel === item.placeLabel) ? ' · ' + label : ''}</span></button>
@@ -315,7 +381,7 @@
   </div>
 
   <main class="view-content">
-  <div class="desktop workspace-view" hidden={!!activeChart || analysisVisible}
+  <div class="desktop workspace-view" hidden={!!activeChart || activeMap || analysisVisible}
     style:--settings-width={panels.settingsWidth + 'px'} style:--assistant-width={(panels.assistantWidth ?? 330) + 'px'}>
     {#if settingsOpen}
       <SettingsPanel {openCoordinates}/>
@@ -329,13 +395,26 @@
     {#if assistantVisible && mapVisible}<ResizeHandle label={$translate('Ancho del asistente')} value={panels.assistantWidth ?? 388} min={265} max={600} direction={-1} resize={value => editVisual(visual => visual.workspace.assistantWidth = value)}/>{/if}
     <aside class="assistant-panel" hidden={!assistantVisible}>
       <header class="panel-heading"><span><Bot size={16}/> {$translate('Asistente de IA')}</span></header>
-      <Assistant series={currentSeries} {running} {storageBusy} {buildInvestigation}
+      <Assistant series={currentSeries} {running} {storageBusy} {buildInvestigation} {regionReset} onreset={clearChatResults}
         acquisitionError={acquisitionError?.key === configKey ? acquisitionError.message : ''}
-        onprocess={() => run({ showChart: false })} onresults={() => chartId = currentSeries[0]?.id ?? null}
+        onprocess={() => run({ showChart: false, retry: true })} onresults={() => chartId = currentSeries[0]?.id ?? null}
         onanalysis={openAnalysis}/>
     </aside>
   </div>
-  {#if activeChart}
+  {#if activeMap}
+    <div class="map-results">
+      {#if mapSeries.length > 1}
+        <label>{$translate('Variable')}
+          <select value={selectedMap.id} onchange={event => mapSeriesId = event.currentTarget.value}>
+            {#each mapSeries as item (item.id)}
+              <option value={item.id}>{item.placeLabel ? item.placeLabel + ' · ' : ''}{$translate(catalog.find(source => source.id === item.id.split('::')[0])?.label ?? item.label ?? item.variable)}</option>
+            {/each}
+          </select>
+        </label>
+      {/if}
+      <Results series={[selectedMap]} mapsOnly/>
+    </div>
+  {:else if activeChart}
     <div class="chart-workspace"><Results series={[activeChart]}/></div>
   {:else if analysisVisible}
     <div class="chart-workspace"><AnalysisPanel {buildInvestigation} {notify}/></div>
@@ -406,3 +485,10 @@
     {/if}
   </dialog>
 </div>
+
+
+<style>
+  .map-results { display: flex; flex-direction: column; height: 100%; min-height: 0; padding: 8px; }
+  .map-results > label { display: flex; align-items: center; gap: 8px; padding-bottom: 8px; }
+  .map-results > label select { width: auto; max-width: 100%; }
+</style>
