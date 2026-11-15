@@ -20,6 +20,13 @@ Proyecto: **Earth Detective / XURCA** (NASA Space Apps 2026). App de escritorio 
 - `sources.js::providerGeometries(route)`; nuevas fuentes en `source-coverage.json`: CHIRPS diario (`maxDays`) y USGS sismos (conteo, magnitud, profundidad; selección `Area`). `coverage.py` admite `Area` y `period_limit`.
 - Panel de configuración: estado `settingsOpen` (no se persiste; `cfg_visual.json` arranca con `settings:false`); se quitó del menú Datos/Visualización.
 
+## Fronteras con JP (detalle completo en `AGENTS.md` de la raíz, sección «Fronteras de trabajo»)
+
+- **Lado de Ema (este agente):** `PY/handlers/`, `PY/models/`, `AnalysisPanel.svelte`, `ForecastChart.svelte`, `analysisText.js`, `docs/plan-maestro/schemas/`.
+- **Lado de JP (Codex):** `Assistant.svelte`, `assistantConfiguration.js`, mascota, `assistant-contract.json`, `services/assistant*.py` (salvo `analysis_catalog()` y `check_analysis()`), `+page.svelte`, mapa, geografía, fuentes y cobertura, comandos de `desktop.py` que no sean de análisis.
+- **Frontera (solo de común acuerdo):** `changes.analysis`, `analysisCatalog`, `analysisDigest`/`assistant_digest`, `prepareInvestigation()`, `executeAnalysis()` + `stores/analysis.js`, `request.json`/`response.json`.
+- Si cambio la forma de `assistant_digest`, de `capabilities()` o de `request`/`response`, avisar a JP antes de subir. Presupuesto del prompt: ~14 800 caracteres libres para contexto; el catálogo de análisis ocupa ~2 500 (no inflarlo).
+
 ## Verificado a mano (2026-11-15, Windows)
 
 - La app arranca con la fusión. Backend: `list_analyses` devuelve 13 structs; un `run_analysis` con POWER T2M + PRECTOTCORR (Villa Mercedes, 2000–2024, mensual) da `completed` en los 10 structs de serie, antes y después de la fusión. `trend_significance`: +0,36 °C/década, p 0,003, IC [0,16; 0,56]; pronóstico con SARIMA (intervalo solo en el horizonte validado).
@@ -82,7 +89,7 @@ Mecanismo: `ParamSpec.depends_on` (`"@cadence"` o el nombre de otro parámetro) 
 
 ## Reglas que hay que respetar
 
-- No tocar `web app/`. No tocar `services/` ni el frontend sin pedido. No modificar archivos de `models/PRESERVATION.json`. **No pisar el trabajo de JP en el asistente** (`Assistant.svelte`, `assistantConfiguration.js`, `assistant-contract.json`, `services/assistant*.py`); D-15: JP es dueño, Ema revisora.
+- No tocar `web app/`. No tocar `services/` ni el frontend sin pedido. No modificar archivos de `models/PRESERVATION.json`. **No editar el lado de JP** (ver «Fronteras con JP»); D-15: JP es dueño del asistente, Ema revisora.
 - Los handlers **no contienen fórmulas**: todo cálculo sale de un método del motor.
 - Nada de interpolación, orden ni conversión de unidades implícitos; toda transformación va en `transformations`.
 - Nunca un «porcentaje de certeza»; p ≥ α o intervalo con 0 → «no hay evidencia suficiente», jamás «sin cambios».
