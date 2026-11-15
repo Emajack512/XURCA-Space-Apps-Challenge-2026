@@ -148,11 +148,19 @@ const FINDINGS = {
   change_point(finding) {
     const h = finding.how_much;
     const what = h.basis === 'anomalies' ? 'la anomalía media' : 'la media';
-    const lines = h.changes.map(c => `${c.date}: ${what} pasa de ${fmt(c.mean_before, 3)} a ${fmt(c.mean_after, 3)} ${unit(h.unit)} (cambio de ${fmt(c.shift, 3)} ${unit(h.unit)})`);
-    const rule = h.penalty_rule === 'sic' ? 'criterio SIC' : 'indicada';
-    lines.push(`Penalización ${fmt(h.penalty, 3)} (${rule}) · tamaño mínimo de tramo ${h.min_size} pasos`);
+    const side = { above_reference: ' · por encima de la base', below_reference: ' · por debajo de la base' };
+    const lines = h.changes.map(c => c.direction
+      ? `${c.date}: alarma${side[c.direction] ?? ''}`
+      : `${c.date}: ${what} pasa de ${fmt(c.mean_before, 3)} a ${fmt(c.mean_after, 3)} ${unit(h.unit)} (cambio de ${fmt(c.shift, 3)} ${unit(h.unit)})`);
+    if (h.method === 'cusum') {
+      lines.push(`CUSUM: holgura k = ${fmt(h.k, 3)} y umbral h = ${fmt(h.h, 3)} desvíos de la base (media ${fmt(h.reference_mean, 3)}, desvío ${fmt(h.reference_std, 3)} ${unit(h.unit)})`);
+    } else {
+      const rule = h.penalty_rule === 'sic' ? 'criterio SIC' : 'indicada';
+      lines.push(`Penalización ${fmt(h.penalty, 3)} (${rule}) · tamaño mínimo de tramo ${h.min_size} pasos`);
+    }
+    const noun = h.method === 'cusum' ? 'alarma(s) de apartamiento de la base' : 'cambio(s) de régimen detectado(s)';
     return {
-      headline: h.n_changes ? `${h.n_changes} cambio(s) de régimen detectado(s)` : 'No se detectaron cambios con esta penalización (no hay evidencia suficiente; no significa que no los haya)',
+      headline: h.n_changes ? `${h.n_changes} ${noun}` : 'No se detectaron cambios con este criterio (no hay evidencia suficiente; no significa que no los haya)',
       lines
     };
   },

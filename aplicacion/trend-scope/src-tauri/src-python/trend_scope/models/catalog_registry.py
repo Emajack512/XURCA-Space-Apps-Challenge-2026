@@ -145,6 +145,16 @@ def catalog_registry(*, include_optional: bool = True):
         dependencies=('numpy',), complexity='O(n log n) time; O(n) memory',
         acceleration='NumPy; no performance claim'),
         analyze_detect_events)
+    from .change_detection.cusum import analyze_cusum_reference
+    registry.register(MethodSpec(
+        method_id='cusum_reference', name='CUSUM against a reference period', version='1.0.0-candidate',
+        category='change_detection', output_kind='events', dimensions=(('time',),), min_observations=24,
+        minimum_reason='mean and standard deviation of the reference period need at least min_reference observations',
+        regularity='regular grid; no missing values; baseline is a dataset variable ID coded 0/1',
+        parameters=('baseline', 'k', 'h', 'min_reference'),
+        dependencies=('numpy', 'numba'), complexity='O(n) time and memory', acceleration='Numba loop',
+        parameter_defaults={'k': 0.5, 'h': 5.0, 'min_reference': 24}),
+        analyze_cusum_reference)
     from .climate.etccdi import analyze_etccdi
     for index, extra, reason in (
             ('rx1day', (), 'Maximum 1-day precipitation per year'),

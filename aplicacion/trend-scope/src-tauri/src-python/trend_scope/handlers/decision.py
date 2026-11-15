@@ -427,13 +427,23 @@ def _change_point(ctx) -> dict:
     else:
         values, basis = prepared.dataset.variables["y"].values, "original"
     unit = prepared.meta["unit"]
-    indices = [int(i) for i in np.asarray(segments_step.payload["change_indices"]).tolist()]
+    is_cusum = segments_step.method_id == "cusum_reference"
+    key = "event_indices" if is_cusum else "change_indices"
+    indices = [int(i) for i in np.asarray(segments_step.payload[key]).tolist()]
     bounds = [0] + indices + [len(values)]
     segments = [{"start": dates[a], "end": dates[b - 1], "n": b - a, "mean": float(values[a:b].mean())}
                 for a, b in zip(bounds[:-1], bounds[1:])]
     changes = [{"date": dates[i], "index": i, "mean_before": segments[k]["mean"], "mean_after": segments[k + 1]["mean"],
                 "shift": segments[k + 1]["mean"] - segments[k]["mean"]} for k, i in enumerate(indices)]
-    notes = ["Aproximación con PELT (costo cuadrático); no es BFAST."]
+    if is_cusum:
+        # The accumulators reset at every alarm, so means between alarms say nothing about the alarm:
+        # report only when and on which side of the reference each alarm fired.
+        directions = [int(d) for d in np.asarray(segments_step.payload["event_directions"]).tolist()]
+        changes = [{"date": dates[i], "index": i, "direction": "above_reference" if d > 0 else "below_reference"}
+                   for i, d in zip(indices, directions)]
+    notes = (["CUSUM respecto de la base de referencia: cada alarma marca cuándo el apartamiento acumulado superó "
+              "el umbral, no cuándo empezó el cambio."] if is_cusum
+             else ["Aproximación con PELT (costo cuadrático); no es BFAST."])
     if basis == "anomalies":
         notes.append("Las medias por tramo son medias de las anomalías (sin ciclo estacional), en la unidad de la variable.")
     else:
@@ -442,11 +452,15 @@ def _change_point(ctx) -> dict:
     finding = _finding(
         "change_point", ctx["series"], ctx["source"], prepared,
         how_much={"n_changes": len(changes), "changes": changes, "segments": segments, "unit": unit, "basis": basis,
+                  "method": "cusum" if is_cusum else "pelt",
+                  **({"k": segments_step.payload["k"], "h": segments_step.payload["h"],
+                      "reference_mean": segments_step.payload["reference_mean"],
+                      "reference_std": segments_step.payload["reference_std"]} if is_cusum else {}),
                   "penalty": segments_step.payload.get("penalty", ctx["params"]["penalty"]),
                   "penalty_rule": segments_step.payload.get("penalty_rule", "manual"),
                   "min_size": ctx["params"]["min_size"], "deseasonalized": deseason is not None},
         conclusiveness="descriptive", statement_key="change_point.detected" if changes else "change_point.none_detected",
-        test="pelt", notes=notes,
+        test="cusum" if is_cusum else "pelt", notes=notes,
         limitations=["Detección por penalización: no es una prueba de significancia y depende de la penalización elegida.",
                      "El instante detectado no es el inicio del cambio.",
                      "Si no se detecta ningún cambio, no hay evidencia suficiente: no significa que no haya cambios."])

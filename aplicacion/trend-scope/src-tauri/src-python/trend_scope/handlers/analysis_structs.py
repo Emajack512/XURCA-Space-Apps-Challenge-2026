@@ -241,6 +241,15 @@ STRUCTS: tuple = (
             gap_policy=ParamSpec("str", "longest_run", choices=("drop", "longest_run"),
                                  description="La detección exige períodos consecutivos"),
             baseline=_BASELINE,
+            method=ParamSpec("str", "pelt", choices=("pelt", "cusum"),
+                             description="pelt: cambios de nivel en toda la serie; cusum: desde cuándo la serie se aparta "
+                                         "de la base de referencia (alarmas acumuladas)"),
+            k=ParamSpec("float", 0.5, 0.0, 5.0, provisional=True,
+                        description="CUSUM: holgura en desvíos de la base (0,5 detecta corrimientos de 1 desvío; "
+                                    "Montgomery)." + _PROPOSED),
+            h=ParamSpec("float", 5.0, 0.5, 50.0, provisional=True,
+                        description="CUSUM: umbral de alarma en desvíos de la base (5 ≈ 465 pasos promedio sin falsa "
+                                    "alarma con datos independientes; Montgomery)." + _PROPOSED),
             penalty=ParamSpec("float", None, 1e-12, 1e12, provisional=True,
                               description="Penalización de PELT, en unidades al cuadrado de la serie. Vacío: criterio SIC "
                                           "(2·σ²·ln n, σ robusto de las diferencias; Killick et al. 2012)." + _PROPOSED),
@@ -256,7 +265,10 @@ STRUCTS: tuple = (
                                          "min_count": "$min_count", "kind": "absolute"},
                                         "Anomalías respecto del ciclo mensual de la base"),),
                  "Quitar el ciclo estacional", optional=True, produces="series"),
-            Step("segments", (Candidate("pelt", "param:penalty=None", {"penalty": "sic", "min_size": "$min_size"},
+            Step("segments", (Candidate("cusum_reference", "param:method=cusum",
+                                        {"baseline": "baseline", "k": "$k", "h": "$h"},
+                                        "CUSUM tabular estandarizado con la media y el desvío de la base de referencia"),
+                              Candidate("pelt", "param:penalty=None", {"penalty": "sic", "min_size": "$min_size"},
                                         "PELT sobre la serie (costo cuadrático), penalización SIC"),
                               Candidate("pelt", "always", {"penalty": "$penalty", "min_size": "$min_size"},
                                         "PELT sobre la serie (costo cuadrático), penalización indicada")),
