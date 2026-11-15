@@ -18,6 +18,8 @@ def request_json(endpoint, provider, **parameters):
         with urlopen(url, timeout=25) as response:
             return json.load(response), url
     except HTTPError as error:
+        if error.code == 429:
+            raise ValueError(f"{provider} alcanzó el límite de consultas. Volvé a intentar más tarde.") from error
         raise ValueError(f"{provider} rechazó la solicitud (HTTP {error.code}). Revisá el identificador y las fechas.") from error
     except (URLError, TimeoutError, json.JSONDecodeError) as error:
         raise ValueError(f"No se pudo obtener una respuesta válida de {provider}.") from error

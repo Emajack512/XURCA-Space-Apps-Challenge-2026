@@ -2,6 +2,7 @@
 
 import math
 from datetime import date, datetime, timedelta, timezone
+from functools import lru_cache
 
 from .catalog import acquisition_gaps
 from .public_sources import request_json
@@ -16,8 +17,26 @@ VARIABLE_MODELS = {
     "temperature_2m_max": "era5_land",
     "temperature_2m_min": "era5_land",
     "precipitation_sum": "era5",
+    "temperature_2m_mean": "era5",
+    "relative_humidity_2m_mean": "era5",
+    "wind_speed_10m_mean": "era5",
+    "shortwave_radiation_sum": "era5",
+    "pressure_msl_mean": "era5",
+    "snowfall_sum": "era5",
+    "cloud_cover_mean": "era5",
     "et0_fao_evapotranspiration": "era5",
 }
+
+
+def archive_data(longitude, latitude, start, end, variables, model):
+    return request_json(
+        ENDPOINT, "Open-Meteo", longitude=longitude, latitude=latitude,
+        start_date=start, end_date=end, daily=",".join(variables),
+        models=model, timezone="GMT", cell_selection="land",
+    )
+
+
+cached_archive_data = lru_cache(maxsize=8)(archive_data)
 
 
 def fetch_reanalysis(sources, investigation):
@@ -52,12 +71,9 @@ def fetch_reanalysis(sources, investigation):
     results = []
     for (longitude, latitude, model), group in groups.items():
         product = "ECMWF ERA5-Land" if model == "era5_land" else "ECMWF ERA5"
-        variables = list(dict.fromkeys(item["upstream"]["variableId"] for item in group))
-        payload, url = request_json(
-            ENDPOINT, "Open-Meteo", longitude=longitude, latitude=latitude,
-            start_date=start, end_date=end, daily=",".join(variables),
-            models=model, timezone="GMT", cell_selection="land",
-        )
+        variables = tuple(sorted({item["upstream"]["variableId"] for item in group}))
+        load = cached_archive_data if end < date.today() - timedelta(days=120) else archive_data
+        payload, url = load(longitude, latitude, start, end, variables, model)
         daily = payload.get("daily") or {}
         dates = daily.get("time") or []
         for source in group:
@@ -74,6 +90,8 @@ def fetch_reanalysis(sources, investigation):
                 if not isinstance(value, (float, int)) or not math.isfinite(value):
                     value = None
                 points.append({"month": day, "value": value})
+            if all(point["value"] is None for point in points):
+                raise ValueError("Open-Meteo no devolvió valores para una de las variables en este lugar y período.")
             cell = [payload["longitude"], payload["latitude"]]
             results.append({
                 "id": source["id"], "provider": "Open-Meteo", "product": product,

@@ -12,6 +12,7 @@ from .regional_layers import temporal_layer
 
 
 OISST = "https://psl.noaa.gov/thredds/ncss/grid/Datasets/noaa.oisst.v2.highres/"
+ERSST = "https://psl.noaa.gov/thredds/ncss/grid/Datasets/noaa.ersst.v5/sst.mnmean.nc"
 ONI = "https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt"
 RONI = "https://www.cpc.ncep.noaa.gov/data/indices/RONI.ascii.txt"
 USGS = "https://earthquake.usgs.gov/fdsnws/event/1/query"
@@ -112,6 +113,38 @@ def fetch_oisst(source, investigation, start, end):
                   [{"month": day, "value": values.get(day)} for day in days(start, end)],
                   f"Punto {lon:.4f}, {lat:.4f} (lon, lat)",
                   "https://psl.noaa.gov/thredds/catalog/Datasets/noaa.oisst.v2.highres/catalog.html")
+
+
+def fetch_ersst(source, investigation, start, end):
+    if source["upstream"]["variableId"] != "sst" or start.year < 1854:
+        raise ValueError("NOAA ERSST permite consultar temperatura mensual del mar desde 1854.")
+    longitude, latitude = selected_geometry(source, investigation, {"Point"})["coordinates"][:2]
+    params = urlencode({"var": "sst", "longitude": longitude % 360, "latitude": latitude,
+                        "time_start": f"{start:%Y-%m}-01T00:00:00Z", "time_end": f"{end:%Y-%m}-01T00:00:00Z",
+                        "accept": "csv"})
+    url = f"{ERSST}?{params}"
+    reader = csv.DictReader(io.StringIO(read_text(url, "NOAA PSL ERSST")))
+    key = next((key for key in reader.fieldnames or [] if key.split("[")[0].strip() == "sst"), None)
+    if key is None:
+        raise ValueError("NOAA PSL no devolvió una serie ERSST válida.")
+    first_month, last_month = str(start)[:7], str(end)[:7]
+    values = {}
+    for row in reader:
+        month = (row.get("time") or "")[:7]
+        if first_month <= month <= last_month:
+            value = number(row[key])
+            values[month] = value if value is not None and -5 <= value <= 50 else None
+    if all(value is None for value in values.values()):
+        raise ValueError("NOAA ERSST no tiene valores en esta celda. Seleccioná un punto en mar abierto.")
+    points = []
+    for year in range(start.year, end.year + 1):
+        first = start.month if year == start.year else 1
+        last = end.month if year == end.year else 12
+        for index in range(first, last + 1):
+            month = f"{year}-{index:02}"
+            points.append({"month": month, "value": values.get(month)})
+    return series(source, "NOAA PSL", "ERSST v5 · celdas de 2°", "°C", points,
+                  f"Punto marino {longitude:.4f}, {latitude:.4f} (lon, lat)", url, "monthly")
 
 
 def fetch_oni(source, investigation, start, end):

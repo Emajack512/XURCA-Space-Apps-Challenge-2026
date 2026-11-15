@@ -4,7 +4,7 @@
   import { catalog } from '$lib/services/sources.js';
   import { translate } from '$lib/services/i18n.js';
   import { onMount, tick } from 'svelte';
-  import { Earth, Aperture, Bot, ChartNoAxesCombined, ChevronDown, CircleHelp, Crosshair, Hand, MapPin, Play, Scan, Hexagon, Settings, Settings2, Trash2, X, Save, FolderOpen } from '@lucide/svelte';
+  import { Earth, Aperture, Bot, ChevronDown, CircleHelp, Crosshair, FlaskConical, Hand, MapPin, Play, Hexagon, Settings, Settings2, Trash2, X, Save, FolderOpen } from '@lucide/svelte';
   import WorldMap from '$lib/components/WorldMap.svelte';
   import Globe from '$lib/components/Globe.svelte';
   import SettingsPanel from '$lib/components/Settings.svelte';
@@ -59,7 +59,7 @@
   let selected = $derived($workspace.data.geography.selection.features.at(-1));
   const tools = [
     ['pan','Desplazar globo',Hand], ['point','Seleccionar punto',MapPin],
-    ['rectangle','Selección rectangular',Scan], ['polygon','Selección poligonal',Hexagon]
+    ['polygon','Selección poligonal',Hexagon]
   ];
 
   onMount(async () => {
@@ -78,11 +78,6 @@
     analysisView = false;
     editVisual(visual => visual.workspace[id] = value);
     if (id === 'map' && !value) cursor = null;
-  }
-
-  function toggleCharts() {
-    analysisView = false;
-    chartId = activeChart ? null : currentSeries[0]?.id ?? null;
   }
 
   async function openChartExport() {
@@ -295,7 +290,6 @@
       {#each tools as [id,label,Icon]}
         <button class="tool-button" class:active={id === tool} aria-pressed={id === tool} title={$translate(label)} aria-label={$translate(label)} onclick={() => chooseTool(id)}><Icon size={17}/></button>
       {/each}
-      <button class="tool-button" title={$translate("Ingresar coordenadas")} aria-label={$translate("Ingresar coordenadas")} onclick={() => openCoordinates()}><Crosshair size={17}/></button>
       <button class="tool-button" title={$translate("Limpiar selecciones")} aria-label={$translate("Limpiar selecciones")} onclick={clearSelection}><Trash2 size={16}/></button>
     </div>
     <div class="panel-buttons">
@@ -303,12 +297,13 @@
         title={$translate('Alternar mapa')} aria-label={$translate('Alternar mapa')}
         onclick={() => togglePanel('map', !mapVisible)}><Earth size={17}/></button>
       <button class="tool-button" class:active={settingsOpen} aria-pressed={settingsOpen} title={$translate("Configuración")} aria-label={$translate("Alternar panel de configuración")} onclick={() => { chartId = null; analysisView = false; settingsOpen = !settingsOpen; }}><Settings size={17}/></button>
-      <button class="tool-button" class:active={!!activeChart} aria-pressed={!!activeChart} disabled={!currentSeries.length} title={$translate("Gráficas")} aria-label={$translate("Alternar gráficas")} onclick={toggleCharts}><ChartNoAxesCombined size={17}/></button>
       <button class="tool-button" class:active={assistantVisible} aria-pressed={assistantVisible} title={$translate("Asistente de IA")} aria-label={$translate("Alternar asistente")} onclick={() => togglePanel('assistantVisible', !assistantVisible)}><Bot size={17}/></button>
     </div>
     <div class="view-tabs" role="group" aria-label={$translate('Vistas de la consulta')}>
       <button class:active={!activeChart && !analysisVisible} aria-pressed={!activeChart && !analysisVisible} onclick={() => { chartId = null; analysisView = false; }}>{$translate('Espacio de trabajo')}</button>
-      <button class:active={analysisVisible} aria-pressed={analysisVisible} onclick={openAnalysis}>{$translate('Análisis estadístico')}</button>
+      <button class="tool-button" class:active={analysisVisible} aria-pressed={analysisVisible}
+        title={$translate('Análisis estadístico')} aria-label={$translate('Análisis estadístico')}
+        onclick={openAnalysis}><FlaskConical size={17}/></button>
       {#each currentSeries as item (item.id)}
         {@const label = $translate(catalog.find(source => source.id === item.id.split('::')[0])?.label ?? item.label ?? item.variable)}
         <button class:active={activeChart?.id === item.id} aria-pressed={activeChart?.id === item.id} title={item.placeLabel ? item.placeLabel + ' · ' + label : label} onclick={() => chartId = item.id}><span>{item.placeLabel ?? label}{item.placeLabel && currentSeries.some(other => other.id !== item.id && other.placeLabel === item.placeLabel) ? ' · ' + label : ''}</span></button>

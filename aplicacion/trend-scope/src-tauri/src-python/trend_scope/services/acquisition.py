@@ -4,9 +4,8 @@ import json
 from datetime import date
 
 from .appeears import fetch_appeears
-from .climate_store import fetch_cds
 from .downloads import fetch_copernicus, fetch_earthdata, fetch_planetary
-from .environmental_series import fetch_earthquakes, fetch_ina, fetch_oisst, fetch_oni, fetch_tide_gauge
+from .environmental_series import fetch_earthquakes, fetch_ersst, fetch_ina, fetch_oisst, fetch_oni, fetch_tide_gauge
 from .firms import fetch_firms
 from .grid_layers import with_grid_map
 from .reanalysis import ROUTE as REANALYSIS, fetch_reanalysis
@@ -16,9 +15,10 @@ from .public_sources import fetch_public_series
 from .station_catalogs import ENTITY_ROUTES, fetch_for_selection
 
 PUBLIC_ROUTES = {"noaa.ncei.station", "noaa.ncei.daily", "nasa.swot.hydrocron"}
-RASTER_ROUTES = {"nasa.appeears", "nasa.earthdata", "copernicus.dataspace", "copernicus.cds", "microsoft.planetary.stac"}
+RASTER_ROUTES = {"nasa.appeears", "nasa.earthdata", "copernicus.dataspace", "microsoft.planetary.stac"}
 SERIES_ROUTES = {
     "noaa.oisst.daily": fetch_oisst,
+    "noaa.ersst.monthly": fetch_ersst,
     "noaa.cpc.oni": fetch_oni,
     CHIRPS_ROUTE: fetch_precipitation,
     CHIRPS_DAILY_ROUTE: fetch_precipitation,
@@ -28,7 +28,6 @@ SERIES_ROUTES = {
     "nasa.appeears": fetch_appeears,
     "nasa.earthdata": fetch_earthdata,
     "copernicus.dataspace": fetch_copernicus,
-    "copernicus.cds": fetch_cds,
     "microsoft.planetary.stac": fetch_planetary,
     "argentina.ina.series": fetch_ina,
     "psmsl.rlr.monthly": fetch_tide_gauge,

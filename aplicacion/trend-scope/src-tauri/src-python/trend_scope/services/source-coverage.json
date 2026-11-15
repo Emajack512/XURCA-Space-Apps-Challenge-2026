@@ -1,9 +1,10 @@
 {
   "schemaVersion": 1,
-  "reviewedOn": "2026-11-14",
+  "reviewedOn": "2026-11-15",
   "products": [
     {
       "id": "chirps-v3-daily",
+      "latitudeLimit": 60,
       "access": "ucsb.chirps.daily",
       "product": "CHIRPS v3 diario",
       "variables": [
@@ -48,6 +49,7 @@
     },
     {
       "id": "chirps-v3-monthly",
+      "latitudeLimit": 60,
       "access": "ucsb.chirps.monthly",
       "product": "CHIRPS v3 final",
       "variables": ["precipitation"],
@@ -110,7 +112,7 @@
       "id": "era5",
       "access": "openmeteo.archive.daily",
       "product": "ECMWF ERA5",
-      "variables": ["precipitation_sum", "et0_fao_evapotranspiration"],
+      "variables": ["precipitation_sum", "et0_fao_evapotranspiration", "temperature_2m_mean", "relative_humidity_2m_mean", "wind_speed_10m_mean", "shortwave_radiation_sum", "pressure_msl_mean", "snowfall_sum", "cloud_cover_mean"],
       "geography": "global-grid",
       "selection": "Point",
       "cadence": "daily",
@@ -138,6 +140,54 @@
       "from": "1950-01-01",
       "publicationLagDays": 5,
       "reference": "https://open-meteo.com/en/docs/historical-weather-api"
+    },
+    {
+      "id": "ersst-v5",
+      "access": "noaa.ersst.monthly",
+      "product": "NOAA ERSST v5",
+      "variables": [
+        "sst"
+      ],
+      "geography": "ocean-grid",
+      "selection": "Point",
+      "cadence": "monthly",
+      "from": "1854-01-01",
+      "latitudeLimit": 88,
+      "publicationLagDays": 35,
+      "reference": "https://psl.noaa.gov/data/gridded/data.noaa.ersst.v5.html"
+    },
+    {
+      "id": "oisst-v2.1",
+      "access": "noaa.oisst.daily",
+      "product": "NOAA OISST v2.1",
+      "variables": [
+        "sst",
+        "anom",
+        "err",
+        "icec"
+      ],
+      "geography": "ocean-grid",
+      "selection": "Point",
+      "cadence": "daily",
+      "from": "1981-09-01",
+      "publicationLagDays": 2,
+      "reference": "https://www.ncei.noaa.gov/products/optimum-interpolation-sst"
+    },
+    {
+      "id": "noaa-ghcnd",
+      "access": "noaa.ncei.daily",
+      "product": "NOAA GHCN-Daily",
+      "variables": [
+        "PRCP",
+        "TMAX",
+        "TMIN"
+      ],
+      "geography": "station-network",
+      "selection": "Station",
+      "cadence": "daily",
+      "collectionFrom": "1880-01-01",
+      "requiresEntityCoverage": true,
+      "reference": "https://www.ncei.noaa.gov/products/land-based-station/global-historical-climatology-network-daily"
     },
     {
       "id": "noaa-gsom",

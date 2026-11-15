@@ -42,6 +42,11 @@ ROUTES = {
         "https://psl.noaa.gov/data/gridded/data.noaa.oisst.v2.highres.html",
         "Public", geometry=("Point",), product_required=False,
     ),
+    "noaa.ersst.monthly": AccessRoute(
+        "NOAA PSL ERSST Monthly",
+        "https://psl.noaa.gov/data/gridded/data.noaa.ersst.v5.html",
+        "Public", geometry=("Point",), product_required=False,
+    ),
     "noaa.cpc.oni": AccessRoute(
         "NOAA CPC ONI / RONI",
         "https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt",
@@ -97,11 +102,6 @@ ROUTES = {
         "Copernicus Data Space OData",
         "https://documentation.dataspace.copernicus.eu/APIs/OData.html",
         "Access token for downloads", geometry=("Point", "Polygon", "MultiPolygon"),
-    ),
-    "copernicus.cds": AccessRoute(
-        "Copernicus Climate Data Store",
-        "https://cds.climate.copernicus.eu/how-to-api",
-        "CDS API key and dataset terms",
     ),
     "microsoft.planetary.stac": AccessRoute(
         "Microsoft Planetary Computer STAC",
