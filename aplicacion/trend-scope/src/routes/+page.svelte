@@ -347,7 +347,7 @@
     {#if assistantVisible && mapVisible}<ResizeHandle label={$translate('Ancho del asistente')} value={panels.assistantWidth ?? 388} min={265} max={600} direction={-1} resize={value => editVisual(visual => visual.workspace.assistantWidth = value)}/>{/if}
     <aside class="assistant-panel" hidden={!assistantVisible}>
       <header class="panel-heading"><span><Bot size={16}/> {$translate('Asistente de IA')}</span></header>
-      <Assistant series={currentSeries} processing={running || storageBusy} onprocess={run}/>
+      <Assistant series={currentSeries} processing={running || storageBusy} onprocess={run} {buildInvestigation} onanalysis={openAnalysis}/>
     </aside>
   </div>
   {#if activeChart}

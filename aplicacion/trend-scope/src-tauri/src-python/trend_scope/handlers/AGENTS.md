@@ -36,6 +36,8 @@ Structs declarados: `describe`, `trend_significance`, `anomaly`, `drought_spi`, 
 
 Valores obligatorios sin default (`required`): `penalty`, `window`, `q`, `min_duration`, `lags`. Provisionales nuevos: `harmonics` 2, `min_size` 6, `components` [0].
 
+**Chat (2026-11-15):** el asistente propone análisis en `changes.analysis` y recibe `assistant_digest`; ver `CLAUDE.md` raíz. Archivos: `services/assistant.py`, `services/assistant-contract.json`, `Assistant.svelte`, `stores/analysis.js`, `services/analysisRunner.js`.
+
 Desvíos de la fase 2: `fdr_bh` lo aplica `decision.py` (no es un paso registrado); sin candidato `cusum` en `change_point`; `relationship` toma `targets[0]` como variable que antecede, `targets[1]` como respuesta y `targets[2:]` como controles de la correlación parcial (desfase 0); `roles` del request se ignora.
 
 Las librerías de la fase 4 son API de Python: no están registradas en `catalog_registry` (necesitan adaptadores de contrato propio: rejillas 2D, series diarias con etiquetas) ni las usa ningún struct todavía. `fire/fwi.py` rechaza latitudes con |lat| < 30° (no se inventaron factores de duración del día tropicales) y no se comparó contra tablas publicadas.

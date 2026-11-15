@@ -2,7 +2,9 @@
   import { onMount } from 'svelte';
   import { FlaskConical, Play } from '@lucide/svelte';
   import ForecastChart from './ForecastChart.svelte';
-  import { analysisRequest, listAnalyses, runAnalysis } from '$lib/services/acquisition.js';
+  import { listAnalyses } from '$lib/services/acquisition.js';
+  import { executeAnalysis } from '$lib/services/analysisRunner.js';
+  import { analysisRun } from '$lib/stores/analysis.js';
   import { describeFinding, parameterValue, statusText, verdictText } from '$lib/services/analysisText.js';
   import { catalog } from '$lib/services/sources.js';
   import { translate } from '$lib/services/i18n.js';
@@ -25,7 +27,8 @@
   let hypothesisKind = $state('');
   let hypothesis = $state({ direction: 'any', operator: '>', statistic: 'last', sign: 'any' });
   let running = $state(false);
-  let response = $state(null);
+  let response = $derived($analysisRun?.response ?? null);
+  let stale = $derived($analysisRun !== null && $analysisRun.key !== JSON.stringify($workspace.data));
 
   let sources = $derived($workspace.data.sources);
   let struct = $derived(catalogue?.analyses.find(item => item.struct_id === structId));
@@ -95,10 +98,10 @@
     const investigation = buildInvestigation();
     if (!investigation) return;
     running = true;
-    response = null;
+    analysisRun.set(null);
     try {
-      const analysis = { id: 'a1', struct: structId, targets: [...targets], params, ...(body ? { hypothesis: body } : {}) };
-      response = await runAnalysis(analysisRequest(investigation, [analysis]));
+      await executeAnalysis(investigation, { struct: structId, targets: [...targets], params, hypothesis: body },
+        JSON.stringify($workspace.data));
     } catch (error) {
       notify(String(error.message ?? error));
     } finally {
@@ -219,6 +222,7 @@
 
     {#if response}
       <section class="analysis-output" aria-live="polite">
+        {#if stale}<p class="analysis-error">{$translate('La configuración cambió después de este análisis. Volvé a ejecutarlo para actualizarlo.')}</p>{/if}
         <p><strong>{$translate('Estado')}:</strong> {statusText(response.status)}</p>
         {#each response.errors as item}<p class="analysis-error">{item.message}</p>{/each}
         {#each response.analyses as block (block.id)}

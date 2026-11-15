@@ -291,7 +291,8 @@ const english = {
   "Avisos": "Warnings",
   "Cómo se calculó": "How it was computed",
   "Preparación de los datos": "Data preparation",
-  "Estado": "Status"
+  "Estado": "Status",
+  "La configuración cambió después de este análisis. Volvé a ejecutarlo para actualizarlo.": "The settings changed after this analysis. Run it again to update it."
 };
 
 const language = derived(workspace, ({ visual }) => visual.language);
