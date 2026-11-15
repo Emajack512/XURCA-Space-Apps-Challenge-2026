@@ -450,4 +450,51 @@ SPATIAL = _dc.replace(
                  "Los puntos vecinos no son independientes: el control de falsos descubrimientos es aproximado.",
                  *_trend.limitations))
 STRUCTS = STRUCTS + (SPATIAL,)
+
+# Grid (map) analyses, stage D. They run in handlers/grid.py on a raster/ GridField instead of a
+# point series; `steps` stay empty because the work is a single engine call per analysis.
+_AREA = ParamSpec("str", None, description="Id del polígono en geography.selection; por defecto el único")
+_GRID_LIMITS = ("Usa la grilla nativa del proveedor: no se interpola ni se regrilla; las celdas sin dato quedan vacías.",
+                "Las celdas cuyo centro cae en el polígono cuentan enteras: no es un promedio zonal exacto.")
+GRID = (
+    AnalysisStruct(
+        struct_id="grid_trend_map", title="Mapa de tendencias por celda", kind="statistical", targets=(1, 1),
+        requirements=Requirements(cadences=("monthly",)),
+        params={"area_feature_id": _AREA, "alpha": _ALPHA,
+                "min_points": ParamSpec("int", 60, 10, 2000, provisional=True,
+                                        description="Meses válidos mínimos por celda para probar la tendencia." + _PROPOSED)},
+        hypotheses=(), steps=(), charts=("map",), phase=4,
+        description="Tendencia (Sen + Mann-Kendall, sin ciclo anual) en cada celda de la grilla dentro del polígono, "
+                    "con control de falsos descubrimientos.",
+        limitations=("Las celdas vecinas están correlacionadas: el control de falsos descubrimientos es aproximado.",
+                     *_GRID_LIMITS)),
+    AnalysisStruct(
+        struct_id="grid_anomaly_map", title="Mapa de anomalías", kind="descriptive", targets=(1, 1),
+        requirements=Requirements(cadences=("monthly",)),
+        params={"area_feature_id": _AREA, "baseline": _BASELINE,
+                "period": ParamSpec("period", None, description="Período a comparar {start, end}; por defecto los últimos 12 meses"),
+                "baseline_min_count": ParamSpec("int", 3, 2, 50, provisional=True,
+                                                description="Años mínimos de la base por mes y celda")},
+        hypotheses=(), steps=(), charts=("map",), phase=4,
+        description="Diferencia del período elegido respecto del promedio mensual de la base, en cada celda.",
+        limitations=("Es descriptivo: una anomalía no es una tendencia ni una prueba.", *_GRID_LIMITS)),
+    AnalysisStruct(
+        struct_id="grid_smoothing", title="Mapa suavizado (convolución 2D)", kind="mathematical", targets=(1, 1),
+        requirements=Requirements(),
+        params={"area_feature_id": _AREA,
+                "size": ParamSpec("int", 3, 3, 9, provisional=True,
+                                  description="Lado de la ventana en celdas (impar)." + _PROPOSED)},
+        hypotheses=(), steps=(), charts=("map",), phase=4,
+        description="Media de caja 2D (FIR) sobre el último paso de la grilla, para ver el patrón general.",
+        limitations=("Suavizar no agrega información ni resolución.", "Si falta alguna celda, ese paso no se suaviza.",
+                     *_GRID_LIMITS)),
+    AnalysisStruct(
+        struct_id="grid_area_summary", title="Resumen de área sobre la grilla", kind="descriptive", targets=(1, 1),
+        requirements=Requirements(),
+        params={"area_feature_id": _AREA},
+        hypotheses=(), steps=(), charts=("map", "timeseries"), phase=4,
+        description="Media ponderada por latitud de las celdas dentro del polígono, con su cobertura en cada paso.",
+        limitations=("Con cobertura baja la media representa solo las celdas con dato.", *_GRID_LIMITS)),
+)
+STRUCTS = STRUCTS + GRID
 BY_ID = {item.struct_id: item for item in STRUCTS}

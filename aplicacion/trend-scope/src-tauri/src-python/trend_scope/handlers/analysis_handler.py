@@ -35,6 +35,9 @@ class ResolvedAnalysis:
 def unavailable_reason(struct: AnalysisStruct) -> Optional[str]:
     if struct.planned:
         return f"Planificado para la fase {struct.phase}; todavía no está implementado."
+    if struct.struct_id.startswith("grid_"):
+        from .grid import connector_reason
+        return connector_reason()
     methods = available_methods()
     for step in struct.steps:
         if not step.optional and not any(c.method_id in methods for c in step.candidates):

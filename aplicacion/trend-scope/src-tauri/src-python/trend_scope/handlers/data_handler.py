@@ -18,7 +18,7 @@ from pydantic import ValidationError
 from ..models.serialization import to_jsonable
 from ..models.stats.multiple_testing import fdr_bh
 from ..services import acquisition, evidence
-from . import algorithm_handler, analysis_handler, decision, preparation, spatial
+from . import algorithm_handler, analysis_handler, decision, grid, preparation, spatial
 from .analysis_structs import BY_ID
 from .contracts import (
     HANDLER_VERSION, INTERNAL, INVALID_REQUEST, RESPONSE_SCHEMA, SOURCE_ERROR, UNSUPPORTED_SPATIAL,
@@ -287,9 +287,11 @@ def _run(raw: dict) -> dict:
     if errors:
         return _failed(raw, errors, digest_hash)
 
-    needed = list(dict.fromkeys(target for spec, _ in resolved for target in (expansions.get(spec.id) or spec.targets)))
+    # Grid analyses fetch their own field through raster/; their template source is not acquired as a point series.
+    needed = list(dict.fromkeys(target for spec, item in resolved if item.struct.struct_id not in grid.GRID_STRUCTS
+                                for target in (expansions.get(spec.id) or spec.targets)))
     filtered = {**investigation, "methods": [], "sources": [sources[target] for target in needed]}
-    series_by_id, source_errors = _acquire(filtered, needed)
+    series_by_id, source_errors = _acquire(filtered, needed) if needed else ({}, {})
 
     blocks, global_errors = [], []
     for spec, item in resolved:
@@ -297,7 +299,9 @@ def _run(raw: dict) -> dict:
         series = series_by_id.get(target)
         message = source_errors.get(target) or source_errors.get("*")
         try:
-            if spec.id in expansions:
+            if item.struct.struct_id in grid.GRID_STRUCTS:
+                block = grid.analyze(spec, item, sources, investigation)
+            elif spec.id in expansions:
                 block = _analyze_pattern(spec, item, expansions[spec.id], series_by_id, sources, source_errors, request)
             elif len(spec.targets) > 1:
                 block = _analyze_many(spec, item, series_by_id, sources, source_errors, request.options)

@@ -203,6 +203,37 @@ const FINDINGS = {
     lines.push('Por año: ' + h.years.map((year, i) => `${year}: ${fmt(h.values[i], 3)}`).slice(-12).join(' · '));
     return { headline: `${h.index}: ${h.title.charAt(0).toLowerCase()}${h.title.slice(1)}`, lines };
   },
+  grid_trend(finding) {
+    const h = finding.how_much;
+    return {
+      headline: `Tendencia en ${h.n_tested} celdas de la grilla`,
+      lines: [`${h.n_significant_fdr} de ${h.n_tested} celdas con tendencia significativa tras controlar falsos descubrimientos (α = ${fmt(h.alpha)})`,
+        `Pendiente mediana: ${fmt(h.median_per_decade, 3)} ${unit(h.unit)} (de ${fmt(h.min_per_decade, 3)} a ${fmt(h.max_per_decade, 3)}) · ${h.n_positive} positivas, ${h.n_negative} negativas`]
+    };
+  },
+  grid_anomaly(finding) {
+    const h = finding.how_much;
+    return {
+      headline: `Anomalía de ${h.period.start} a ${h.period.end} respecto de ${h.baseline.start.slice(0, 4)}-${h.baseline.end.slice(0, 4)}`,
+      lines: [`Anomalía media del área: ${fmt(h.mean, 3)} ${unit(h.unit)} (de ${fmt(h.min, 3)} a ${fmt(h.max, 3)} según la celda)`]
+    };
+  },
+  grid_smoothing(finding) {
+    const h = finding.how_much;
+    return {
+      headline: `Mapa suavizado de ${h.date}`,
+      lines: [`Ventana de ${h.kernel_size}×${h.kernel_size} celdas${h.skipped_recent_incomplete ? ` · se saltearon ${h.skipped_recent_incomplete} paso(s) más reciente(s) con celdas faltantes` : ''}`]
+    };
+  },
+  grid_area_summary(finding) {
+    const h = finding.how_much;
+    const last = h.series?.[h.series.length - 1];
+    return {
+      headline: `Media de ${h.n_cells_inside} celdas dentro del polígono`,
+      lines: [`Media de todo el período: ${fmt(h.mean_of_period, 3)} ${unit(h.unit)} · cobertura mínima ${fmt(h.min_coverage * 100, 3)} %`,
+        ...(last ? [`Último paso (${last.date}): ${fmt(last.value, 3)} ${unit(h.unit)}, cobertura ${fmt(last.coverage * 100, 3)} %`] : [])]
+    };
+  },
   spatial_pattern(finding) {
     const h = finding.how_much;
     return {
