@@ -43,6 +43,7 @@ class Requirements:
     baseline_param: Optional[str] = None  # param holding the reference period
     depth_total: bool = False     # needs monthly precipitation depth totals
     constant_groups: bool = False # annual series get a single group so group-wise methods apply
+    year_groups: bool = False     # daily series: keep complete calendar years, groups = year
 
 
 @dataclass(frozen=True)
@@ -331,6 +332,39 @@ STRUCTS: tuple = (
                      "Con varios desfases las pruebas se corrigen por falsos descubrimientos (Benjamini-Hochberg).",
                      "Tendencias o ciclos compartidos inflan la asociación; por eso se quita el ciclo mensual por defecto.",
                      "El tamaño efectivo supone dependencia serial de orden 1.")),
+    AnalysisStruct(
+        struct_id="precipitation_indices", title="Índices de precipitación diaria (ETCCDI)", kind="statistical",
+        targets=(1, 1),
+        requirements=Requirements(cadences=("daily",), regular=True, min_points=730, time="years",
+                                  variable_families=("precipitation",), baseline_param="baseline",
+                                  depth_total=True, year_groups=True),
+        params=_common(
+            gap_policy=ParamSpec("str", "longest_run", choices=("drop", "longest_run"),
+                                 description="Los índices exigen días consecutivos"),
+            baseline=_BASELINE,
+            wet_threshold=ParamSpec("float", 1.0, 0.01, 100.0, description="Umbral de día húmedo, en mm (valor estándar ETCCDI: 1 mm)"),
+            percentile=ParamSpec("float", 95.0, 50.0, 99.9, description="Percentil de los días húmedos de la base para R95pTOT")),
+        hypotheses=(),
+        steps=(
+            Step("rx1day", (Candidate("rx1day", "always", {"groups": "groups"}, "Máxima precipitación en 1 día por año"),),
+                 "Rx1day"),
+            Step("rx5day", (Candidate("rx5day", "always", {"groups": "groups"}, "Máxima precipitación en 5 días consecutivos por año"),),
+                 "Rx5day"),
+            Step("sdii", (Candidate("sdii", "always", {"groups": "groups", "wet_threshold": "$wet_threshold"},
+                                    "Intensidad media de los días húmedos"),), "SDII"),
+            Step("cdd", (Candidate("cdd", "always", {"groups": "groups", "wet_threshold": "$wet_threshold"},
+                                   "Máxima racha de días secos"),), "CDD"),
+            Step("r95ptot", (Candidate("r95ptot", "always",
+                                       {"groups": "groups", "baseline": "baseline", "wet_threshold": "$wet_threshold",
+                                        "percentile": "$percentile"},
+                                       "Precipitación total en días sobre el percentil de la base"),), "R95pTOT"),
+        ),
+        charts=("table",),
+        description="Índices anuales de precipitación extrema calculados sobre precipitación diaria: Rx1day, Rx5day, SDII, CDD y R95pTOT.",
+        limitations=("Cada índice se informa por separado; no se combinan en un puntaje.",
+                     "Solo se usan años calendario completos y la serie diaria no puede tener huecos.",
+                     "Con pocos años no se puede inferir una tendencia del índice.",
+                     "Un punto o una celda no representa el promedio de una región.")),
     AnalysisStruct(
         struct_id="forecast", title="Pronóstico mensual con validación", kind="predictive", targets=(1, 1),
         requirements=Requirements(cadences=("monthly",), regular=True, min_points=60, time="years"),

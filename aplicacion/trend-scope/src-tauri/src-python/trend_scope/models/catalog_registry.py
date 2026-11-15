@@ -143,4 +143,19 @@ def catalog_registry(*, include_optional: bool = True):
         dependencies=('numpy',), complexity='O(n log n) time; O(n) memory',
         acceleration='NumPy; no performance claim'),
         analyze_detect_events)
+    from .climate.etccdi import analyze_etccdi
+    for index, extra, reason in (
+            ('rx1day', (), 'Maximum 1-day precipitation per year'),
+            ('rx5day', (), 'Maximum 5-day precipitation total per year'),
+            ('sdii', ('wet_threshold',), 'Mean precipitation on wet days per year'),
+            ('cdd', ('wet_threshold',), 'Longest run of dry days per year'),
+            ('r95ptot', ('baseline', 'wet_threshold', 'percentile'), 'Total precipitation above the base-period wet-day percentile')):
+        registry.register(MethodSpec(
+            method_id=index, name=index.upper(), version='1.0.0-candidate', category='climate', output_kind='index',
+            dimensions=(('time',),), min_observations=365,
+            minimum_reason=reason + '; needs a regular daily series covering at least one complete year',
+            regularity='regular daily grid; complete calendar years; no missing values; groups = year label (dataset variable ID)',
+            parameters=('groups',) + extra, dependencies=('numpy',), complexity='O(n) per index',
+            acceleration='NumPy; no performance claim'),
+            partial(analyze_etccdi, index))
     return registry

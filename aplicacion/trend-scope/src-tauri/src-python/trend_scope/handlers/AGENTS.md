@@ -36,6 +36,8 @@ Structs declarados: `describe`, `trend_significance`, `anomaly`, `drought_spi`, 
 
 Valores obligatorios sin default (`required`): `penalty`, `window`, `q`, `min_duration`, `lags`. Provisionales nuevos: `harmonics` 2, `min_size` 6, `components` [0].
 
+**Fase 4 · W10 (2026-11-15):** struct `precipitation_indices`, `Requirements.year_groups` (años completos y etiquetas de año en `preparation.py`), builder `_precipitation_indices` y adaptador `analyze_etccdi`.
+
 **Chat (2026-11-15):** el asistente propone análisis en `changes.analysis` y recibe `assistant_digest`; ver `CLAUDE.md` raíz. Archivos: `services/assistant.py`, `services/assistant-contract.json`, `Assistant.svelte`, `stores/analysis.js`, `services/analysisRunner.js`.
 
 Desvíos de la fase 2: `fdr_bh` lo aplica `decision.py` (no es un paso registrado); sin candidato `cusum` en `change_point`; `relationship` toma `targets[0]` como variable que antecede, `targets[1]` como respuesta y `targets[2:]` como controles de la correlación parcial (desfase 0); `roles` del request se ignora.

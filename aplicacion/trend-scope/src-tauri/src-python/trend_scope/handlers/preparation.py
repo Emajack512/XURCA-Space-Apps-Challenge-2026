@@ -258,6 +258,20 @@ def prepare(series: dict, source: Optional[dict], struct: AnalysisStruct, params
             dates, values, idx = dates[start:stop], values[start:stop], idx[start:stop]
     regular = bool(cadence in REGULAR and (len(idx) < 2 or np.all(np.diff(idx) == 1)))
 
+    # ---- complete calendar years (ETCCDI indices are defined per full year)
+    if req.year_groups and cadence == "daily" and regular:
+        years = np.array([day.year for day in dates])
+        full = {int(year) for year, count in zip(*np.unique(years, return_counts=True))
+                if count == (366 if calendar.isleap(int(year)) else 365)}
+        keep = np.array([int(year) in full for year in years])
+        if not keep.any():
+            raise HandlerError(INSUFFICIENT_DATA, "La serie no contiene ningún año calendario completo sin faltantes.", scope)
+        if not keep.all():
+            transformations.append({"operation": "keep_complete_years", "version": VERSION,
+                                    "parameters": {"kept_years": len(full), "discarded_days": int((~keep).sum())}})
+            dates = [day for day, ok in zip(dates, keep) if ok]
+            values, idx = values[keep], idx[keep]
+
     # ---- numeric time
     if req.time == "months" and cadence == "monthly":
         time_values, time_unit = (idx - idx[0]).astype(np.float64), "month"
@@ -283,6 +297,13 @@ def prepare(series: dict, source: Optional[dict], struct: AnalysisStruct, params
             derived["baseline"], derived["min_count"] = info, min_count
     elif cadence == "annual" and req.constant_groups and req.baseline_param:
         label_groups = np.ones(len(dates), dtype=np.int64)
+        variables["groups"] = VariableData(label_groups, ("time",), "1")
+        mask, info, min_count = _baseline(dates, params, req.baseline_param, min_coverage)
+        variables[req.baseline_param] = VariableData(mask.astype(np.int64), ("time",), "1")
+        derived["baseline"], derived["min_count"] = info, min_count
+
+    elif cadence == "daily" and req.year_groups and req.baseline_param and regular:
+        label_groups = np.array([day.year for day in dates], dtype=np.int64)
         variables["groups"] = VariableData(label_groups, ("time",), "1")
         mask, info, min_count = _baseline(dates, params, req.baseline_param, min_coverage)
         variables[req.baseline_param] = VariableData(mask.astype(np.int64), ("time",), "1")

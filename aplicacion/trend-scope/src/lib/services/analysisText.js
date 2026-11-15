@@ -170,6 +170,14 @@ const FINDINGS = {
       lines
     };
   },
+  climate_index(finding) {
+    const h = finding.how_much;
+    const lines = [`${h.n_years} años completos · media ${fmt(h.mean)} ${h.unit} · mínimo ${fmt(h.minimum)} · máximo ${fmt(h.maximum)} (${h.maximum_year})`,
+      `Último año (${h.last_year}): ${fmt(h.last)} ${h.unit}`];
+    if (h.threshold !== undefined) lines.push(`Umbral: percentil ${fmt(h.percentile)} de los días húmedos de la base = ${fmt(h.threshold)} mm (${h.n_reference_wet_days} días de referencia)`);
+    lines.push('Por año: ' + h.years.map((year, i) => `${year}: ${fmt(h.values[i], 3)}`).slice(-12).join(' · '));
+    return { headline: `${h.index}: ${h.title.charAt(0).toLowerCase()}${h.title.slice(1)}`, lines };
+  },
   spatial_pattern(finding) {
     const h = finding.how_much;
     return {

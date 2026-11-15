@@ -25,9 +25,9 @@ Se refinó y se implementó la arquitectura del backend propuesta en `Mapa_front
 | 1 | `handlers/` (contracts, analysis_structs, analysis_handler, preparation, algorithm_handler, decision, data_handler), comandos `run_analysis` y `list_analyses` en `desktop.py`, W17 y W18 | Hecha |
 | 2 | W05 (`stats/lagged.py`), W04 (`climate/events.py`) + structs `seasonality`, `change_point`, `smoothing`, `extreme_events`, `relationship` | Hecha (sin ejecutar) |
 | 3 | Pronóstico: W07–W09, W13, W20 + `forecast_backtest`; W06; structs `forecast` y `spatial_pattern`; `spatial.py` | Hecha |
-| 4 | W19, W10, W11, W12, W14, W15, W16 como API de Python | Hecha (sin registrar ni usar desde structs) |
+| 4 | W19, W10, W11, W12, W14, W15, W16 como API de Python | Hecha; solo W10 está registrada y usada (struct `precipitation_indices`); W11, W12, W14, W15, W16, W19 siguen como API sin registrar (necesitan ráster o varias variables diarias que los conectores no entregan) |
 
-Structs declarados hoy (12): `describe`, `trend_significance`, `anomaly`, `drought_spi`, `regression_fit`, `forecast`, `spatial_pattern`, `seasonality`, `change_point`, `smoothing`, `extreme_events`, `relationship`. `change_point` solo está disponible si `ruptures` está instalado; `seasonality` usa STL solo con `statsmodels`.
+Structs declarados hoy (13): `describe`, `trend_significance`, `anomaly`, `drought_spi`, `regression_fit`, `forecast`, `spatial_pattern`, `seasonality`, `change_point`, `smoothing`, `extreme_events`, `relationship`, `precipitation_indices` (W10 conectada: Rx1day, Rx5day, SDII, CDD y R95pTOT sobre precipitación diaria en mm, solo años calendario completos; registrados como métodos propios en `catalog_registry.py`; `wet_threshold` 1 mm y percentil 95 son los valores estándar ETCCDI). `change_point` solo está disponible si `ruptures` está instalado; `seasonality` usa STL solo con `statsmodels`.
 
 **Parámetros obligatorios sin valor por defecto** (la investigación no los fija; `ParamSpec.required=True`, el backend responde `INVALID_REQUEST` si faltan): `penalty` (change_point), `window` (smoothing), `q` y `min_duration` (extreme_events), `lags` (relationship). Provisionales nuevos: `harmonics` 2 (seasonality), `min_size` 6 (change_point), `components` [0] (smoothing).
 

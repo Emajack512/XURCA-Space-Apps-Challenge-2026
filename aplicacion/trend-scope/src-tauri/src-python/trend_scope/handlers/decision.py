@@ -577,7 +577,56 @@ def _relationship(ctx) -> dict:
     return {"findings": [finding], "verdict": _verdict_relationship(ctx["hypothesis"], rows, alpha), "charts": charts}
 
 
-BUILDERS = {"describe": _describe, "trend_significance": _trend, "anomaly": _anomaly,
+def _precipitation_indices(ctx) -> dict:
+    steps, prepared = ctx["steps"], ctx["prepared"]
+    unit = prepared.meta["unit"]
+    labels = {"rx1day": ("Rx1day", "Máxima precipitación en 1 día", unit),
+              "rx5day": ("Rx5day", "Máxima precipitación en 5 días consecutivos", unit),
+              "sdii": ("SDII", "Intensidad media de los días húmedos", f"{unit}/día húmedo"),
+              "cdd": ("CDD", "Máxima racha de días secos", "días"),
+              "r95ptot": ("R95pTOT", "Precipitación total en días sobre el percentil de la base", unit)}
+    findings = []
+    base = prepared.derived.get("baseline")
+    for name, (short, title, index_unit) in labels.items():
+        step = _step(steps, name)
+        if step is None:
+            findings.append(_gap("climate_index", ctx["series"], ctx["source"], prepared, steps,
+                                 f"No se pudo calcular {short}."))
+            continue
+        p = step.payload
+        years = np.asarray(p["group_ids"]).astype(int).tolist()
+        raw = np.asarray(p["values"], dtype=float)
+        valid = np.asarray(p["valid"], dtype=bool)
+        good = raw[valid]
+        if good.size == 0:
+            findings.append(_gap("climate_index", ctx["series"], ctx["source"], prepared, steps, f"{short} no tiene años válidos."))
+            continue
+        position = np.flatnonzero(valid)
+        how = {"index": short, "title": title, "unit": index_unit, "years": years,
+               "values": [_f(v) if ok else None for v, ok in zip(raw, valid)], "n_years": int(valid.sum()),
+               "mean": _f(good.mean()), "minimum": _f(good.min()), "maximum": _f(good.max()),
+               "maximum_year": years[int(position[int(np.argmax(good))])], "last": _f(good[-1]),
+               "last_year": years[int(position[-1])], "wet_threshold": ctx["params"]["wet_threshold"]}
+        notes = []
+        if name == "r95ptot":
+            how.update({"percentile": ctx["params"]["percentile"], "threshold": _f(p.get("threshold")),
+                        "n_reference_wet_days": int(p.get("n_reference_wet_days", 0))})
+            if base and base.get("note"):
+                notes.append(base["note"])
+        if int(valid.sum()) < 10:
+            notes.append("Hay menos de 10 años: no alcanza para hablar de tendencia ni de variabilidad interanual.")
+        finding = _finding("climate_index", ctx["series"], ctx["source"], prepared, how_much=how,
+                           statement_key=f"climate_index.{name}", conclusiveness="descriptive", notes=notes,
+                           limitations=["Cada índice se informa por separado.",
+                                        "Solo se usaron años calendario completos, sin días faltantes.",
+                                        "Un punto no representa el promedio de una región."])
+        finding["baseline"] = base if name == "r95ptot" else None
+        findings.append(finding)
+    return {"findings": findings, "verdict": None,
+            "charts": [{"kind": "table", "series_ref": ctx["series"].get("id"), "indices": list(labels)}]}
+
+
+BUILDERS = {"precipitation_indices": _precipitation_indices, "describe": _describe, "trend_significance": _trend, "anomaly": _anomaly,
             "drought_spi": _spi, "regression_fit": _fit, "forecast": _forecast,
             "seasonality": _seasonality, "change_point": _change_point, "smoothing": _smoothing,
             "extreme_events": _events, "relationship": _relationship}
