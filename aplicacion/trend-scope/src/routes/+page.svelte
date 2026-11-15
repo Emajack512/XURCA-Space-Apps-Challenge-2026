@@ -258,7 +258,10 @@
     ['Datos', [['Abrir configuración',() => togglePanel('settings',true)],['Ingresar coordenadas',() => openCoordinates()]]],
     ['Análisis', [['Procesar',run],['Mostrar resultados',() => chartId = currentSeries[0]?.id ?? null]]],
     ['Visualización', [['Resolución gráfica',() => showDialog('chart-resolution')],['Alternar configuración',() => togglePanel('settings')],['Alternar asistente',() => togglePanel('assistantVisible', !assistantVisible)]]],
-    ['Capas', [['Alternar controles de capas',() => togglePanel('layers')]]],
+    ['Capas', [
+      ['Alternar fronteras', () => editVisual(visual => visual.map.layers.countries = !visual.map.layers.countries)],
+      ['Alternar selecciones', () => editVisual(visual => visual.map.layers.selection = !visual.map.layers.selection)]
+    ]],
     ['Exportar', [['Guardar gráfica…',openChartExport],['Descargar cfg_data.json',() => downloadJson('cfg_data.json',$workspace.data)],['Descargar cfg_visual.json',() => downloadJson('cfg_visual.json',$workspace.visual)]]]
   ];
 </script>

@@ -7,6 +7,9 @@ export function nearPolygonStart(first, x, y) {
 }
 
 export const initialCamera = { longitude: -66, latitude: -26, zoom: 1 };
+const mapZoomOffset = 1.3;
+export const toMapZoom = factor => mapZoomOffset + Math.log2(factor);
+export const fromMapZoom = zoom => 2 ** (zoom - mapZoomOffset);
 export const wrapLongitude = longitude => ((longitude + 180) % 360 + 360) % 360 - 180;
 export const clampLatitude = latitude => Math.max(-89.9, Math.min(89.9, latitude));
 export const validCoordinates = (longitude, latitude) => Number.isFinite(longitude) && Number.isFinite(latitude)
