@@ -17,7 +17,7 @@ Trabajá desde `aplicacion/trend-scope/`. La interfaz usa SvelteKit con adaptado
 
 ## Fronteras de trabajo entre JP y Ema (leer antes de editar)
 
-Dos personas trabajan en paralelo sobre `main`, cada una con su agente (JP con Codex, Ema con Claude Code). Para no pisarse, cada archivo tiene un dueño. Rutas relativas a `aplicacion/trend-scope/`; `PY` = `src-tauri/src-python/trend_scope/`.
+Trabajan en paralelo **tres agentes**: el **Codex de JP** (frontend y asistente), **Claude Code de Ema** (motor estadístico) y el **Codex de Ema** (solo `PY/raster/`, conectores de grillas; sus reglas están en `PY/raster/AGENTS.md` y trabaja en el worktree `XURCA-codex-raster`, rama `ema_codex_raster`). **Si sos el Codex de JP, `PY/raster/` no es tuyo ni del lado de JP: no lo edites.** Para no pisarse, cada archivo tiene un dueño. Rutas relativas a `aplicacion/trend-scope/`; `PY` = `src-tauri/src-python/trend_scope/`.
 
 ### Lado de JP — frontend general y asistente de IA (editable libremente por JP/Codex)
 - `src/lib/components/Assistant.svelte`, `src/lib/services/assistantConfiguration.js` (+ su `.test.js`), `src/lib/assets/mascot/`.
@@ -30,6 +30,10 @@ Dos personas trabajan en paralelo sobre `main`, cada una con su agente (JP con C
 - `PY/models/` completo (motor científico; respetar `PY/models/AGENTS.md` y `PRESERVATION.json`).
 - `src/lib/components/AnalysisPanel.svelte`, `ForecastChart.svelte`, `src/lib/services/analysisText.js`.
 - `docs/plan-maestro/schemas/` (JSON Schema y fixtures de request/response).
+
+### Lado de Ema — Codex de Ema (solo `PY/raster/`)
+- `PY/raster/`: conectores de grillas (NASA POWER regional, ERA5 vía Open-Meteo, CHIRPS COG), fixtures y `NOTES.md`. Excepción: `PY/raster/contract.py` (`GridRequest`/`GridField`) es frontera congelada entre el Codex de Ema y Claude; se cambia solo de común acuerdo.
+- Los mapas que el frontend dibuje a partir de estas grillas (componentes de mapa) siguen siendo de JP; el formato de las grillas en `response.json` lo define Claude en `contracts.py` y se avisa a JP antes de cambiarlo.
 
 ### Frontera — contrato compartido (cambiar solo de común acuerdo)
 | Punto de contacto | Quién lo produce | Quién lo consume |

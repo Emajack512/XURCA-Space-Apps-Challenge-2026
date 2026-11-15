@@ -20,6 +20,19 @@ Proyecto: **Earth Detective / XURCA** (NASA Space Apps 2026). App de escritorio 
 - `sources.js::providerGeometries(route)`; nuevas fuentes en `source-coverage.json`: CHIRPS diario (`maxDays`) y USGS sismos (conteo, magnitud, profundidad; selección `Area`). `coverage.py` admite `Area` y `period_limit`.
 - Panel de configuración: estado `settingsOpen` (no se persiste; `cfg_visual.json` arranca con `settings:false`); se quitó del menú Datos/Visualización.
 
+## Etapa D (mapas) en paralelo con el Codex de Ema — desde 2026-11-15
+
+- **Codex de Ema** (worktree `C:\Users\Victus\Desktop\nasa-hackathon\XURCA-codex-raster`, rama `ema_codex_raster`): conectores de grillas en `PY/raster/` (`providers.py::fetch_grid`, `power_regional.py`, `openmeteo_grid.py`, `chirps_cog.py`, `manual_check.py`, `fixtures/`, `NOTES.md`). Reglas en `PY/raster/AGENTS.md`. No toca nada fuera de `PY/raster/`.
+- **Frontera congelada:** `PY/raster/contract.py` (`GridRequest`, `GridField`: ejes ascendentes, `values` (time, lat, lon) con NaN = sin dato, `mask`, unidad, procedencia). Solo se cambia de común acuerdo.
+- **Claude (este agente), en paralelo, sin tocar `PY/raster/`:** structs sobre grillas en `handlers/` y `models/`, desarrollados con `GridField` sintéticos hasta que existan los fixtures reales:
+  1. `grid_trend_map`: tendencia (Sen + Mann-Kendall) por celda dentro de la máscara + FDR (Benjamini-Hochberg) sobre las celdas.
+  2. `grid_anomaly_map`: anomalía de un período contra la base, por celda (paleta divergente centrada en 0 la decide el frontend).
+  3. `grid_smoothing`: convolución 2D (`signal/convolution2d.py`) por intervalo, sin rellenar NaN.
+  4. `grid_area_summary`: media de área ponderada por cos(lat) de las celdas con dato, rotulada como promedio de grilla (no zonal exacto) con cobertura.
+  5. Bloque `grids` en `response.json` (contracts.py + schemas) con los metadatos que pide el documento de la ingeniera (`variable`, `kind`, `unit`, `valid_at`, `value_min/max` recomendados, `color_scale_type` secuencial/divergente, `coverage_fraction`, `nodata`, `native_resolution`, procedencia); los colores los elige el frontend (JP).
+  6. Struct `fire_weather` (FWI) sobre un punto con 4 variables diarias de ERA5 (temperatura, humedad, viento, lluvia), si el tiempo alcanza.
+- **Integración:** cuando el Codex termine, Ema (o Claude a pedido) hace merge de `ema_codex_raster` en `ema_workspace`, se corre `manual_check.py` y los structs de grilla con datos reales, y recién entonces se sube a `main`.
+
 ## Fronteras con JP (detalle completo en `AGENTS.md` de la raíz, sección «Fronteras de trabajo»)
 
 - **Lado de Ema (este agente):** `PY/handlers/`, `PY/models/`, `AnalysisPanel.svelte`, `ForecastChart.svelte`, `analysisText.js`, `docs/plan-maestro/schemas/`.
