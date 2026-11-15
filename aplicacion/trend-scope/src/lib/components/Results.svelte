@@ -27,10 +27,12 @@
       <article class="chart-card" data-series-id={item.id}>
         <header><strong>{label}</strong></header>
         <p class="quiet">{item.provider} · {$translate(item.unit)} · {location(item, $translate)}</p>
-        <p class="quiet">{available} {$translate('de')} {item.points.length} {$translate(period)}</p>
+        {#if item.message}<p>{item.message}</p>{/if}
+        {#if item.downloadPath}<p class="quiet"><code>{item.downloadPath}</code></p>{/if}
+        {#if !item.message}<p class="quiet">{available} {$translate('de')} {item.points.length} {$translate(period)}</p>{/if}
         {#if available}
           <ChartView series={item} {label} {resolution}/>
-        {:else}
+        {:else if !item.message}
           <p>{$translate('No hay valores para el período seleccionado.')}</p>
         {/if}
         {#if item.product}<p class="quiet">{item.product}</p>{/if}

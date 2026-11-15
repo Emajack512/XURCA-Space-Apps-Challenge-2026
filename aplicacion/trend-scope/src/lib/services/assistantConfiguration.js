@@ -1,5 +1,5 @@
 import contract from '../../../src-tauri/src-python/trend_scope/services/assistant-contract.json' with { type: 'json' };
-import { catalog, sourceConfig } from './sources.js';
+import { assistantCatalog as catalog, sourceConfig, geographicEntityRoutes } from './sources.js';
 import { closedRegion, validCoordinates } from './geography.js';
 
 function checkShape(value, schema) {
@@ -60,19 +60,12 @@ function configureSource(item, points, newPoint, existing) {
   if (!entry) throw new Error('Una variable propuesta no está en el catálogo: ' + item.id);
   const config = sourceConfig(item.id);
   const { upstream } = config;
-  if (config.access === 'noaa.ncei.station' || config.access === 'nasa.swot.hydrocron') {
-    const station = config.access === 'noaa.ncei.station';
-    const key = station ? 'stationId' : 'featureId';
-    const id = (item.entityId ?? existing?.upstream.selectors[key] ?? '').trim().toUpperCase();
-    if (!(station ? /^[A-Z0-9]{11}$/ : /^\d{10,11}$/).test(id)) {
-      throw new Error('Indicá el identificador oficial para ' + entry.label + '.');
-    }
-    upstream.selectors[key] = id;
-  } else {
-    const pointId = item.pointId || newPoint?.id || existing?.upstream.geometryId || (points.length === 1 ? points[0].id : null);
-    if (!points.some(point => point.id === pointId)) throw new Error('Elegí un punto de consulta para ' + entry.label + '.');
-    upstream.geometryId = pointId;
-  }
+  const compatible = geographicEntityRoutes.has(config.access)
+    ? points : points.filter(item => item.geometry.type === 'Point');
+  const preferred = item.pointId || newPoint?.id || existing?.upstream.geometryId;
+  const selection = compatible.find(item => item.id === preferred) ?? (compatible.length === 1 ? compatible[0] : null);
+  if (!selection) throw new Error('Elegí una selección geográfica para ' + entry.label + '.');
+  upstream.geometryId = selection.id;
   return config;
 }
 
@@ -115,11 +108,8 @@ export async function configureWorkspace(snapshot, changes, invoke, language) {
     selection.features.push(feature);
     if (point) Object.assign(visual.map.camera, { longitude: point.longitude, latitude: point.latitude });
   }
-  if (changes.polygon && changes.sources?.length) {
-    throw new Error('Los conectores actuales requieren un punto o un identificador para procesar series. El promedio por polígono no está disponible.');
-  }
   if (changes.sources || point) {
-    const points = selection.features.filter(item => item.geometry.type === 'Point');
+    const points = selection.features;
     const requests = changes.sources ?? data.sources.filter(item => catalog.some(entry => entry.id === item.id))
       .map(item => ({ id: item.id }));
     const configured = requests.map(item => configureSource(item, points, feature, data.sources.find(source => source.id === item.id)));
