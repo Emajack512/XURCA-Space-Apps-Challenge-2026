@@ -19,6 +19,7 @@ from typing import Any, Optional
 
 import numpy as np
 
+from ..models.stats.multiple_testing import fdr_bh
 from ..services.station_catalogs import ENTITY_ROUTES
 
 SPI_DEFICIT = -1.0   # documented SPI state thresholds (plan: -1 / +1)
@@ -338,8 +339,248 @@ def _plain(mapping) -> dict:
     return {str(k): _f(v) if isinstance(v, (int, float)) else v for k, v in dict(mapping).items()}
 
 
+# ----------------------------------------------------------------------------- phase 2
+
+CHART_LIMIT = 5000
+
+
+def _listed(array, limit: int = CHART_LIMIT):
+    """Plain list of finite floats for a chart overlay; None when the array is too long."""
+    values = np.asarray(array, dtype=float)
+    if values.size > limit:
+        return None
+    return [_f(v) for v in values]
+
+
+def _seasonality(ctx) -> dict:
+    steps, prepared = ctx["steps"], ctx["prepared"]
+    harmonic = _step(steps, "harmonic")
+    if harmonic is None:
+        return {"findings": [_gap("seasonality", ctx["series"], ctx["source"], prepared, steps,
+                                  "No se pudo ajustar el ciclo anual.")], "verdict": None, "charts": []}
+    unit = prepared.meta["unit"]
+    parameters, metrics = harmonic.payload.get("parameters", {}), harmonic.payload.get("metrics", {})
+    how = {"unit": unit, "period": "1 año", "harmonics": ctx["params"]["harmonics"],
+           "coefficients": {k: _f(v) for k, v in parameters.items() if k.startswith(("cos_", "sin_"))},
+           "r2": _f(metrics.get("r2")), "seasonal_strength": prepared.profile.get("seasonal_strength"),
+           "annual_bin": None, "stl_seasonal_range": None}
+    notes = []
+    spectrum = _step(steps, "spectrum")
+    if spectrum is not None:
+        frequencies = np.asarray(spectrum.payload["frequencies"], dtype=float)   # cycles per year
+        amplitude = np.asarray(spectrum.payload["amplitude"], dtype=float)
+        if frequencies.size > 1:
+            k = int(np.argmin(np.abs(frequencies - 1.0)))
+            how["annual_bin"] = {"frequency_per_year": _f(frequencies[k]), "amplitude": _f(amplitude[k]), "unit": unit}
+    else:
+        notes.append("El espectro de amplitud no se calculó.")
+    decomposition = _step(steps, "decomposition")
+    chart = {"kind": "decomposition", "series_ref": ctx["series"].get("id"), "dates": prepared.meta["dates"]}
+    if decomposition is not None:
+        seasonal = np.asarray(decomposition.payload["seasonal"], dtype=float)
+        how["stl_seasonal_range"] = _f(seasonal.max() - seasonal.min())
+        chart.update({"trend": _listed(decomposition.payload["trend"]), "seasonal": _listed(seasonal),
+                      "residual": _listed(decomposition.payload["residuals"])})
+    else:
+        notes.append("La descomposición STL no está disponible (falta statsmodels o la serie es corta).")
+    fitted = harmonic.payload.get("y_pred")
+    if fitted is not None:
+        chart["harmonic_fit"] = _listed(fitted)
+    finding = _finding("seasonality", ctx["series"], ctx["source"], prepared, how_much=how,
+                       statement_key="seasonality.descriptive", notes=notes,
+                       limitations=["Describe el ciclo de la muestra; no prueba que sea estadísticamente significativo.",
+                                    "El espectro tiene fugas espectrales; la descomposición STL usa todo el período."])
+    return {"findings": [finding], "verdict": None, "charts": [chart]}
+
+
+def _verdict_change_point(hypothesis: Optional[dict], finding: Optional[dict]) -> Optional[dict]:
+    if hypothesis is None:
+        return None
+    base = {"hypothesis": hypothesis}
+    if finding is None or finding["conclusiveness"] == "insufficient_data":
+        return {**base, "status": "not_testable", "reason_key": "verdict.not_testable", "evidence": {}}
+    changes = finding["how_much"]["changes"]
+    window = hypothesis.get("window")
+    inside = [c for c in changes if not window or window["start"] <= c["date"] <= window["end"]]
+    evidence = {"n_changes": len(changes), "dates_in_window": [c["date"] for c in inside], "window": window,
+                "caveat": "detección por penalización: no es una prueba de significancia"}
+    if inside:
+        return {**base, "status": "supported", "reason_key": "verdict.change_point.detected", "evidence": evidence}
+    # A detector that finds nothing does not prove that nothing changed.
+    return {**base, "status": "inconclusive", "reason_key": "verdict.inconclusive", "evidence": evidence}
+
+
+def _change_point(ctx) -> dict:
+    steps, prepared = ctx["steps"], ctx["prepared"]
+    segments_step = _step(steps, "segments")
+    if segments_step is None:
+        return {"findings": [_gap("change_point", ctx["series"], ctx["source"], prepared, steps,
+                                  "No se pudieron detectar cambios.")],
+                "verdict": _verdict_change_point(ctx["hypothesis"], None), "charts": []}
+    dates = prepared.meta["dates"]
+    values = prepared.dataset.variables["y"].values
+    unit = prepared.meta["unit"]
+    indices = [int(i) for i in np.asarray(segments_step.payload["change_indices"]).tolist()]
+    bounds = [0] + indices + [len(values)]
+    segments = [{"start": dates[a], "end": dates[b - 1], "n": b - a, "mean": float(values[a:b].mean())}
+                for a, b in zip(bounds[:-1], bounds[1:])]
+    changes = [{"date": dates[i], "index": i, "mean_before": segments[k]["mean"], "mean_after": segments[k + 1]["mean"],
+                "shift": segments[k + 1]["mean"] - segments[k]["mean"]} for k, i in enumerate(indices)]
+    notes = ["Aproximación con PELT (costo cuadrático); no es BFAST.",
+             "Las medias por tramo se calculan sobre la serie original, en su unidad."]
+    if _step(steps, "deseason") is None:
+        notes.append("La serie no se desestacionalizó antes de detectar cambios.")
+    finding = _finding(
+        "change_point", ctx["series"], ctx["source"], prepared,
+        how_much={"n_changes": len(changes), "changes": changes, "segments": segments, "unit": unit,
+                  "penalty": ctx["params"]["penalty"], "min_size": ctx["params"]["min_size"],
+                  "deseasonalized": _step(steps, "deseason") is not None},
+        conclusiveness="descriptive", statement_key="change_point.detected" if changes else "change_point.none_detected",
+        test="pelt", notes=notes,
+        limitations=["Detección por penalización: no es una prueba de significancia y depende de la penalización elegida.",
+                     "El instante detectado no es el inicio del cambio.",
+                     "Si no se detecta ningún cambio, no hay evidencia suficiente: no significa que no haya cambios."])
+    charts = [{"kind": "change_points", "series_ref": ctx["series"].get("id"), "dates": [c["date"] for c in changes]}]
+    return {"findings": [finding], "verdict": _verdict_change_point(ctx["hypothesis"], finding), "charts": charts}
+
+
+def _smoothing(ctx) -> dict:
+    step = _step(ctx["steps"], "smooth")
+    prepared = ctx["prepared"]
+    if step is None:
+        return {"findings": [_gap("smoothing", ctx["series"], ctx["source"], prepared, ctx["steps"],
+                                  "No se pudo suavizar la serie.")], "verdict": None, "charts": []}
+    values = np.asarray(step.payload["values"], dtype=float)
+    dates = prepared.meta["dates"]
+    dates = dates[len(dates) - len(values):]
+    unit = prepared.meta["unit"]
+    causal = step.payload.get("causal")
+    finding = _finding(
+        "smoothing", ctx["series"], ctx["source"], prepared,
+        how_much={"method": step.method_id, "window": ctx["params"]["window"], "n_input": prepared.profile["n"],
+                  "n_smoothed": int(values.size), "causal": causal, "unit": unit, "first": _f(values[0]),
+                  "last": _f(values[-1]), "minimum": _f(values.min()), "maximum": _f(values.max())},
+        statement_key="smoothing.descriptive",
+        notes=([] if causal else ["SSA usa toda la serie (no causal): sirve para describir, no para validar ni pronosticar."]),
+        limitations=["Suavizar no es detectar tendencias ni probar nada.",
+                     "La media móvil causal acorta la serie y desplaza la señal hacia atrás."])
+    overlay = {"type": "smoothed", "step": "smooth", "dates": dates, "values": _listed(values)}
+    return {"findings": [finding], "verdict": None,
+            "charts": [{"kind": "timeseries", "series_ref": ctx["series"].get("id"), "overlays": [overlay]}]}
+
+
+def _events(ctx) -> dict:
+    step = _step(ctx["steps"], "events")
+    prepared = ctx["prepared"]
+    series = prepared.dataset.variables["y"].values
+    if step is None:
+        return {"findings": [_gap("event", ctx["series"], ctx["source"], prepared, ctx["steps"],
+                                  "No se pudieron detectar eventos.")],
+                "verdict": _verdict_threshold(ctx["hypothesis"], None), "charts": []}
+    p = step.payload
+    dates = prepared.meta["dates"]
+    unit = prepared.meta["unit"]
+    limit = 200
+    starts, ends = np.asarray(p["start_indices"]).tolist(), np.asarray(p["end_indices"]).tolist()
+    durations, peaks = np.asarray(p["durations"]).tolist(), np.asarray(p["peak_values"]).tolist()
+    peak_at, excess = np.asarray(p["peak_indices"]).tolist(), np.asarray(p["mean_exceedance"]).tolist()
+    events = [{"start": dates[a], "end": dates[b], "duration_steps": int(d), "peak_value": _f(v), "peak_date": dates[k],
+               "mean_exceedance": _f(e)} for a, b, d, v, k, e in zip(starts, ends, durations, peaks, peak_at, excess)]
+    thresholds = np.asarray(p["reference"]["thresholds"], dtype=float)
+    base = prepared.derived.get("baseline")
+    finding = _finding(
+        "event", ctx["series"], ctx["source"], prepared,
+        how_much={"n_events": int(p["n_events"]), "q": ctx["params"]["q"], "direction": p["direction"],
+                  "min_duration_steps": int(p["min_duration"]), "exceedance_fraction": _f(p["exceedance_fraction"]),
+                  "threshold_min": _f(thresholds.min()), "threshold_max": _f(thresholds.max()), "unit": unit,
+                  "events": events[:limit], "truncated": len(events) > limit},
+        conclusiveness="descriptive", statement_key="event.found" if events else "event.none_found",
+        notes=[base["note"]] if base and base.get("note") else [],
+        limitations=["Un evento no es una tendencia ni una anomalía: son resultados distintos.",
+                     "El umbral sale solo del período de referencia y tiene incertidumbre de muestreo que no se estima."])
+    finding["baseline"] = base
+    charts = [{"kind": "table", "series_ref": ctx["series"].get("id"),
+               "overlays": [{"type": "event_spans", "spans": [{"start": e["start"], "end": e["end"]} for e in events[:limit]]}]}]
+    return {"findings": [finding], "verdict": _verdict_threshold(ctx["hypothesis"], series), "charts": charts}
+
+
+def _verdict_relationship(hypothesis: Optional[dict], rows: Optional[list], alpha: float) -> Optional[dict]:
+    if hypothesis is None:
+        return None
+    base = {"hypothesis": hypothesis}
+    if not rows:
+        return {**base, "status": "not_testable", "reason_key": "verdict.not_testable", "evidence": {}}
+    wanted = hypothesis.get("lags")
+    sign = hypothesis.get("sign", "any")
+    tested = [row for row in rows if wanted is None or row["lag"] in wanted]
+    matching = [row["lag"] for row in tested if row["significant_fdr"]
+                and (sign == "any" or (sign == "positive") == (row["r"] > 0))]
+    evidence = {"lags_tested": [row["lag"] for row in tested], "lags_significant_matching": matching, "sign": sign,
+                "alpha": alpha, "kind": "association", "caveat": "asociación estadística, no causa"}
+    if matching:
+        return {**base, "status": "supported", "reason_key": "verdict.relationship.supported", "evidence": evidence}
+    return {**base, "status": "inconclusive", "reason_key": "verdict.inconclusive", "evidence": evidence}
+
+
+def _relationship(ctx) -> dict:
+    steps, prepared, params = ctx["steps"], ctx["prepared"], ctx["params"]
+    step = _step(steps, "lags")
+    if step is None:
+        return {"findings": [_gap("association", ctx["series"], ctx["source"], prepared, steps,
+                                  "No se pudo calcular la correlación.")],
+                "verdict": _verdict_relationship(ctx["hypothesis"], None, params["alpha"]), "charts": []}
+    p = step.payload
+    alpha = params["alpha"]
+    lags = np.asarray(p["lags"]).tolist()
+    p_values, testable = np.asarray(p["p_value"], dtype=float), np.asarray(p["testable"], dtype=bool)
+    q_values = [None] * len(lags)
+    rejected = [False] * len(lags)
+    if testable.any():
+        adjusted = fdr_bh(p_values[testable], alpha=alpha)
+        for position, q, flag in zip(np.flatnonzero(testable).tolist(), adjusted["q_values"], adjusted["rejected"]):
+            q_values[position], rejected[position] = float(q), bool(flag)
+    rows = [{"lag": int(lag), "r": _f(r), "n": int(n), "n_effective": _f(neff), "p_value": _f(pv), "q_value": q,
+             "significant_fdr": flag, "testable": bool(ok)}
+            for lag, r, n, neff, pv, q, flag, ok in zip(lags, np.asarray(p["r"]).tolist(), np.asarray(p["n"]).tolist(),
+                                                        np.asarray(p["n_effective"]).tolist(), p_values.tolist(),
+                                                        q_values, rejected, testable.tolist())]
+    roles = prepared.meta["roles"]
+    partial = None
+    partial_step = _step(steps, "partial")
+    if partial_step is not None:
+        q = partial_step.payload
+        partial = {"r": _f(q["r"]), "n": int(q["n"]), "n_effective": _f(q["n_effective"]), "p_value": _f(q["p_value"]),
+                   "testable": bool(q["testable"]), "significant": bool(q["testable"] and q["p_value"] < alpha),
+                   "controls": [role["variable"] for role in roles[2:]], "lag": 0,
+                   "note": "Correlación parcial en desfase 0, sin corrección por pruebas múltiples (una sola prueba)."}
+    elif roles[2:]:
+        partial = {"unavailable": True, "reason": next((s.reason for s in steps if s.step_id == "partial" and s.reason), "")}
+    n_hits = sum(rejected)
+    notes = ["Asociación estadística: no establece causa ni dirección causal."]
+    if prepared.meta.get("deseasonalized"):
+        notes.append("Se quitó el ciclo mensual de cada serie antes de correlacionar.")
+    else:
+        notes.append("No se quitó el ciclo estacional: tendencias o ciclos compartidos pueden inflar la asociación.")
+    finding = _finding(
+        "association", ctx["series"], ctx["source"], prepared,
+        how_much={"lags": rows, "n_tests": len(rows), "n_significant_fdr": n_hits, "alpha": alpha, "unit": "1",
+                  "lag_convention": "desfase positivo: la primera variable antecede a la segunda",
+                  "step_unit": prepared.meta["time_unit"], "partial": partial,
+                  "deseasonalized": bool(prepared.meta.get("deseasonalized"))},
+        alpha=alpha, test="pearson_lagged_fdr_bh", conclusiveness="conclusive" if n_hits else "inconclusive",
+        statement_key="association.fdr_significant" if n_hits else "association.inconclusive", notes=notes,
+        limitations=["Correlación no implica causalidad.",
+                     "El tamaño efectivo supone dependencia serial de orden 1 en ambas series.",
+                     "No se elige un «mejor desfase»: se informan todos los evaluados."])
+    finding["what"] = {"first": roles[0], "second": roles[1], "controls": roles[2:]}
+    charts = [{"kind": "scatter_lag", "series_refs": [role["id"] for role in roles], "lags": lags}]
+    return {"findings": [finding], "verdict": _verdict_relationship(ctx["hypothesis"], rows, alpha), "charts": charts}
+
+
 BUILDERS = {"describe": _describe, "trend_significance": _trend, "anomaly": _anomaly,
-            "drought_spi": _spi, "regression_fit": _fit, "forecast": _forecast}
+            "drought_spi": _spi, "regression_fit": _fit, "forecast": _forecast,
+            "seasonality": _seasonality, "change_point": _change_point, "smoothing": _smoothing,
+            "extreme_events": _events, "relationship": _relationship}
 
 
 def build(struct, params: dict, steps: list, prepared, series: dict, source: Optional[dict],

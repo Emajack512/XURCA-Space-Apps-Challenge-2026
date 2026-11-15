@@ -9,6 +9,7 @@
   import Globe from '$lib/components/Globe.svelte';
   import SettingsPanel from '$lib/components/Settings.svelte';
   import Results from '$lib/components/Results.svelte';
+  import AnalysisPanel from '$lib/components/AnalysisPanel.svelte';
   import Assistant from '$lib/components/Assistant.svelte';
   import ResizeHandle from '$lib/components/ResizeHandle.svelte';
   import { workspace, defaults, editData, editVisual, selectGeometry } from '$lib/stores/workspace.js';
@@ -36,6 +37,7 @@
   let running = $state(false);
   let result = $state(null);
   let chartId = $state(null);
+  let analysisView = $state(false);
   let savedConfig = $state('');
   let storageBusy = $state(true);
   let panels = $derived($workspace.visual.workspace);
@@ -43,6 +45,7 @@
   let assistantVisible = $derived(panels.assistantVisible !== false);
   let currentSeries = $derived(result?.key === configKey ? result.series : []);
   let activeChart = $derived(currentSeries.find(item => item.id === chartId));
+  let analysisVisible = $derived(analysisView && !activeChart);
   let exportableSeries = $derived(currentSeries.filter(item => item.points.some(point => point.value !== null)));
   let exportId = $state('');
   let exporting = $state(false);
@@ -68,11 +71,13 @@
   function notify(text) { notice = text; }
   function togglePanel(id, value = panels[id] === false) {
     chartId = null;
+    analysisView = false;
     editVisual(visual => visual.workspace[id] = value);
     if (id === 'map' && !value) cursor = null;
   }
 
   function toggleCharts() {
+    analysisView = false;
     chartId = activeChart ? null : currentSeries[0]?.id ?? null;
   }
 
@@ -108,23 +113,30 @@
   }
   function chooseTool(id) { tool = id; vertices = []; }
   function clearSelection() { vertices = []; editData(data => data.geography.selection.features = []); }
-  async function run() {
-    if (running || storageBusy) return;
+  /** cfg_data ready to send (point sources bound to the selected point), or null after notifying why not. */
+  function buildInvestigation() {
     const investigation = JSON.parse(configKey);
     const point = investigation.geography.selection.features.filter(item => item.geometry.type === 'Point');
     if (!investigation.sources.length) {
       notify('Agregá al menos una variable.');
-      return;
+      return null;
     }
     for (const source of investigation.sources) {
       if (!['nasa.power.monthly', 'openmeteo.archive.daily'].includes(source.access)) continue;
       if (point.some(item => item.id === source.upstream.geometryId)) continue;
       if (point.length !== 1) {
         notify('Marcá un punto o elegí cuál usar en cada variable puntual.');
-        return;
+        return null;
       }
       source.upstream.geometryId = point[0].id;
     }
+    return investigation;
+  }
+  function openAnalysis() { chartId = null; analysisView = true; }
+  async function run() {
+    if (running || storageBusy) return;
+    const investigation = buildInvestigation();
+    if (!investigation) return;
     const startedWith = configKey;
     running = true;
     result = null;
@@ -244,7 +256,7 @@
   const menus = [
     ['Proyecto', [['Guardar configuración',save],['Recuperar configuración',() => dirty ? showDialog('restore') : restore()]]],
     ['Datos', [['Abrir configuración',() => togglePanel('settings',true)],['Ingresar coordenadas',() => openCoordinates()]]],
-    ['Análisis', [['Procesar',run],['Mostrar resultados',() => chartId = currentSeries[0]?.id ?? null]]],
+    ['Análisis', [['Procesar',run],['Mostrar resultados',() => chartId = currentSeries[0]?.id ?? null],['Análisis estadístico…',openAnalysis]]],
     ['Visualización', [['Resolución gráfica',() => showDialog('chart-resolution')],['Alternar configuración',() => togglePanel('settings')],['Alternar asistente',() => togglePanel('assistantVisible', !assistantVisible)]]],
     ['Capas', [['Alternar controles de capas',() => togglePanel('layers')]]],
     ['Exportar', [['Guardar gráfica…',openChartExport],['Descargar cfg_data.json',() => downloadJson('cfg_data.json',$workspace.data)],['Descargar cfg_visual.json',() => downloadJson('cfg_visual.json',$workspace.visual)]]]
@@ -288,7 +300,8 @@
       <button class="tool-button" class:active={assistantVisible} aria-pressed={assistantVisible} title={$translate("Asistente de IA")} aria-label={$translate("Alternar asistente")} onclick={() => togglePanel('assistantVisible', !assistantVisible)}><Bot size={17}/></button>
     </div>
     <div class="view-tabs" role="group" aria-label={$translate('Vistas de la consulta')}>
-      <button class:active={!activeChart} aria-pressed={!activeChart} onclick={() => chartId = null}>{$translate('Espacio de trabajo')}</button>
+      <button class:active={!activeChart && !analysisVisible} aria-pressed={!activeChart && !analysisVisible} onclick={() => { chartId = null; analysisView = false; }}>{$translate('Espacio de trabajo')}</button>
+      <button class:active={analysisVisible} aria-pressed={analysisVisible} onclick={openAnalysis}>{$translate('Análisis estadístico')}</button>
       {#each currentSeries as item (item.id)}
         {@const label = $translate(catalog.find(source => source.id === item.id.split('::')[0])?.label ?? item.label ?? item.variable)}
         <button class:active={activeChart?.id === item.id} aria-pressed={activeChart?.id === item.id} title={item.placeLabel ? item.placeLabel + ' · ' + label : label} onclick={() => chartId = item.id}><span>{item.placeLabel ?? label}{item.placeLabel && currentSeries.some(other => other.id !== item.id && other.placeLabel === item.placeLabel) ? ' · ' + label : ''}</span></button>
@@ -300,7 +313,7 @@
   </div>
 
   <main class="view-content">
-  <div class="desktop workspace-view" hidden={!!activeChart}
+  <div class="desktop workspace-view" hidden={!!activeChart || analysisVisible}
     style:--settings-width={panels.settingsWidth + 'px'} style:--assistant-width={(panels.assistantWidth ?? 330) + 'px'}>
     {#if panels.settings}
       <SettingsPanel {openCoordinates}/>
@@ -319,6 +332,8 @@
   </div>
   {#if activeChart}
     <div class="chart-workspace"><Results series={[activeChart]}/></div>
+  {:else if analysisVisible}
+    <div class="chart-workspace"><AnalysisPanel {buildInvestigation} {notify}/></div>
   {/if}
   </main>
 

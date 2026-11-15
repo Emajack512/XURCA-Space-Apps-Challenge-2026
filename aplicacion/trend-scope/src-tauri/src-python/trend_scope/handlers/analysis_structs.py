@@ -6,9 +6,10 @@ formulas: every step names registered methods of the scientific engine
 
 Conditions are named strings evaluated by the algorithm handler:
   always | seasonal | not_seasonal | monthly_cycle | autocorrelated | pairs_ok |
-  param:<key>=<value>
+  has_controls | param:<key>=<value>
 Parameter values starting with "$" are looked up in the effective parameters
-(or derived values), "@groups" is the calendar-month label array.
+(or derived values), "@groups" is the calendar-month label array, "@controls"
+the dataset ids of the control series (relationship).
 """
 from __future__ import annotations
 
@@ -16,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping, Optional
 
 # Highest implementation phase available (docs/plan-maestro/23_ARQUITECTURA_HANDLERS.md §6).
-IMPLEMENTED_PHASE = 1
+IMPLEMENTED_PHASE = 3
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,7 @@ class ParamSpec:
     choices: tuple = ()
     provisional: bool = False
     description: str = ""
+    required: bool = False        # no default: the research does not fix a value (models/AGENTS.md §3)
 
 
 @dataclass(frozen=True)
@@ -40,6 +42,7 @@ class Requirements:
     time: str = "years"           # years | months
     baseline_param: Optional[str] = None  # param holding the reference period
     depth_total: bool = False     # needs monthly precipitation depth totals
+    constant_groups: bool = False # annual series get a single group so group-wise methods apply
 
 
 @dataclass(frozen=True)
@@ -197,30 +200,137 @@ STRUCTS: tuple = (
         description="Ajusta un modelo matemático a la serie. Es descriptivo: no evalúa significancia.",
         limitations=("Ajuste descriptivo dentro de la muestra; no es un pronóstico validado.",),
     ),
-    # --- Planned (phase 2 and 3): declared so the catalogue is honest about what is missing.
     AnalysisStruct(
         struct_id="seasonality", title="Estacionalidad", kind="mathematical", targets=(1, 1),
-        requirements=Requirements(cadences=("monthly",), regular=True, min_points=24), params=_common(),
-        hypotheses=(), steps=(Step("harmonic", (Candidate("harmonic"),)),), charts=("decomposition",), phase=2, planned=True),
+        requirements=Requirements(cadences=("monthly",), regular=True, min_points=24, time="years"),
+        params=_common(
+            gap_policy=ParamSpec("str", "longest_run", choices=("drop", "longest_run"),
+                                 description="La estacionalidad exige meses consecutivos"),
+            harmonics=ParamSpec("int", 2, 1, 6, provisional=True, description="Armónicos del ciclo anual (provisional)"),
+            trend_degree=ParamSpec("int", 1, 0, 3, description="Grado de la tendencia polinómica que acompaña al ciclo")),
+        hypotheses=(),
+        steps=(
+            Step("harmonic", (Candidate("harmonic", "always",
+                                        {"period": 1.0, "harmonics": "$harmonics", "trend_degree": "$trend_degree"},
+                                        "Regresión armónica con período de 1 año"),),
+                 "Ajuste armónico del ciclo anual"),
+            Step("spectrum", (Candidate("fft", "always", {"detrend": True}, "Espectro de amplitud (exploratorio)"),),
+                 "Espectro de amplitud", optional=True),
+            Step("decomposition", (Candidate("stl", "always", {"period": 12, "seasonal": 7, "robust": True},
+                                             "Descomposición STL con período de 12 meses"),),
+                 "Descomposición tendencia / estacional / residuo", optional=True),
+        ),
+        charts=("decomposition",),
+        description="Cuánto y cómo se repite el ciclo anual de la variable (ajuste armónico, espectro y descomposición).",
+        limitations=("Describe el ciclo de la muestra; no prueba que sea estadísticamente significativo.",
+                     "El espectro tiene fugas espectrales; es exploratorio.",
+                     "La descomposición STL usa datos de todo el período (no sirve para pronosticar).")),
     AnalysisStruct(
         struct_id="change_point", title="Cambios de régimen", kind="statistical", targets=(1, 1),
-        requirements=Requirements(cadences=("monthly", "annual"), regular=True, min_points=24), params=_common(),
-        hypotheses=("change_point",), steps=(Step("segments", (Candidate("pelt"), Candidate("cusum"))),),
-        charts=("change_points",), phase=2, planned=True),
+        requirements=Requirements(cadences=("monthly", "annual"), regular=True, min_points=24, time="years",
+                                  baseline_param="baseline"),
+        params=_common(
+            gap_policy=ParamSpec("str", "longest_run", choices=("drop", "longest_run"),
+                                 description="La detección exige períodos consecutivos"),
+            baseline=_BASELINE,
+            penalty=ParamSpec("float", None, 1e-12, 1e12, required=True,
+                              description="Penalización de PELT, en unidades al cuadrado de la serie "
+                                          "(sin valor por defecto: la investigación no lo fija)"),
+            min_size=ParamSpec("int", 6, 2, 1000, provisional=True,
+                               description="Tamaño mínimo de cada segmento, en pasos (provisional)")),
+        hypotheses=("change_point",),
+        steps=(
+            Step("deseason", (Candidate("anomalies", "monthly_cycle",
+                                        {"groups": "groups", "baseline": "baseline",
+                                         "min_count": "$min_count", "kind": "absolute"},
+                                        "Anomalías respecto del ciclo mensual de la base"),),
+                 "Quitar el ciclo estacional", optional=True, produces="series"),
+            Step("segments", (Candidate("pelt", "always", {"penalty": "$penalty", "min_size": "$min_size"},
+                                        "PELT sobre la serie (costo cuadrático)"),),
+                 "Detección de cambios"),
+        ),
+        charts=("change_points",),
+        description="Instantes en que cambia el nivel medio de la serie. Es una aproximación, no BFAST.",
+        limitations=("Detección por penalización: no es una prueba de significancia y depende de la penalización elegida.",
+                     "El instante detectado no es el inicio del cambio; puede reflejar un cambio de sensor o de método.",
+                     "Si no se detecta ningún cambio, no hay evidencia suficiente: no significa que no haya cambios.")),
     AnalysisStruct(
         struct_id="smoothing", title="Suavizado", kind="mathematical", targets=(1, 1),
-        requirements=Requirements(regular=True, min_points=4), params=_common(),
-        hypotheses=(), steps=(Step("smooth", (Candidate("moving_average"), Candidate("ssa"))),),
-        charts=("timeseries",), phase=2, planned=True),
+        requirements=Requirements(regular=True, min_points=4, time="years"),
+        params=_common(
+            gap_policy=ParamSpec("str", "longest_run", choices=("drop", "longest_run"),
+                                 description="El suavizado exige pasos consecutivos"),
+            method=ParamSpec("str", "moving_average", choices=("moving_average", "ssa"), description="Método de suavizado"),
+            window=ParamSpec("int", None, 2, 5000, required=True,
+                             description="Ventana en pasos de la serie (sin valor por defecto)"),
+            components=ParamSpec("int_list", [0], 0, 100, provisional=True,
+                                 description="Componentes SVD que reconstruye SSA, base 0 (provisional)")),
+        hypotheses=(),
+        steps=(Step("smooth", (
+            Candidate("moving_average", "param:method=moving_average", {"window": "$window"},
+                      "Media móvil causal (cada valor usa solo el presente y el pasado)"),
+            Candidate("ssa", "param:method=ssa", {"window": "$window", "components": "$components"},
+                      "Análisis espectral singular con componentes explícitos"),
+        ), "Suavizado"),),
+        charts=("timeseries",),
+        description="Serie suavizada para ver el comportamiento de fondo. Es descriptivo.",
+        limitations=("La media móvil causal acorta la serie en ventana − 1 pasos y desplaza la señal hacia atrás.",
+                     "SSA usa toda la serie: no es un pronóstico ni se puede usar para validar.",
+                     "Suavizar no es detectar tendencias ni probar nada.")),
     AnalysisStruct(
         struct_id="extreme_events", title="Eventos extremos", kind="statistical", targets=(1, 1),
-        requirements=Requirements(min_points=24), params=_common(), hypotheses=("threshold",),
-        steps=(Step("events", (Candidate("detect_events"),)),), charts=("table",), phase=2, planned=True),
+        requirements=Requirements(cadences=("monthly", "annual"), regular=True, min_points=24, time="years",
+                                  baseline_param="baseline", constant_groups=True),
+        params=_common(
+            gap_policy=ParamSpec("str", "longest_run", choices=("drop", "longest_run"),
+                                 description="Los eventos exigen períodos consecutivos"),
+            baseline=_BASELINE,
+            q=ParamSpec("float", None, 0.0001, 0.9999, required=True,
+                        description="Percentil del umbral, entre 0 y 1 (sin valor por defecto)"),
+            direction=ParamSpec("str", "above", choices=("above", "below"),
+                                description="above: valores por encima del umbral; below: por debajo"),
+            min_duration=ParamSpec("int", None, 1, 1000, required=True,
+                                   description="Duración mínima del evento, en pasos (sin valor por defecto)")),
+        hypotheses=("threshold",),
+        steps=(Step("events", (Candidate(
+            "detect_events", "always",
+            {"groups": "groups", "baseline": "baseline", "q": "$q", "min_count": "$min_count",
+             "direction": "$direction", "min_duration": "$min_duration"},
+            "Umbral por percentil de la base y tramos consecutivos que lo superan"),), "Eventos extremos"),),
+        charts=("table",),
+        description="Períodos consecutivos en que la variable supera (o queda bajo) el percentil de la base.",
+        limitations=("Un evento no es una tendencia ni una anomalía: son resultados distintos.",
+                     "El umbral sale solo de la base; la adecuación de la base la decide quien consulta.",
+                     "El umbral tiene incertidumbre de muestreo que no se estima.")),
     AnalysisStruct(
         struct_id="relationship", title="Asociación entre variables", kind="statistical", targets=(2, 4),
-        requirements=Requirements(regular=True, min_points=24), params=_common(), hypotheses=("relationship",),
-        steps=(Step("lags", (Candidate("lagged_correlation"),)), Step("fdr", (Candidate("fdr_bh"),))),
-        charts=("scatter_lag",), phase=2, planned=True),
+        requirements=Requirements(cadences=("monthly", "annual"), regular=True, min_points=24, time="months",
+                                  baseline_param="baseline"),
+        params=_common(
+            gap_policy=ParamSpec("str", "longest_run", choices=("drop", "longest_run"),
+                                 description="La correlación con desfases exige períodos consecutivos"),
+            baseline=_BASELINE, alpha=_ALPHA,
+            lags=ParamSpec("int_list", None, -60, 60, required=True,
+                           description="Desfases a evaluar, en pasos (positivo: la primera variable antecede a la segunda). "
+                                       "Sin valor por defecto"),
+            deseasonalize=ParamSpec("bool", True, description="Quitar el ciclo mensual de cada serie antes de correlacionar")),
+        hypotheses=("relationship",),
+        steps=(
+            Step("lags", (Candidate("lagged_correlation", "always", {"second_variable": "second", "lags": "$lags"},
+                                    "Correlación de Pearson con tamaño efectivo por autocorrelación"),),
+                 "Correlación con desfases"),
+            Step("partial", (Candidate("partial_correlation", "has_controls",
+                                       {"second_variable": "second", "controls": "@controls"},
+                                       "Correlación parcial quitando el efecto lineal de las variables de control"),),
+                 "Correlación parcial", optional=True),
+        ),
+        charts=("scatter_lag",),
+        description="Asociación lineal entre dos variables en desfases explícitos (targets[0] antecede a targets[1]; "
+                    "targets[2:] son controles para la correlación parcial). Nunca prueba causa.",
+        limitations=("Correlación no implica causalidad.",
+                     "Con varios desfases las pruebas se corrigen por falsos descubrimientos (Benjamini-Hochberg).",
+                     "Tendencias o ciclos compartidos inflan la asociación; por eso se quita el ciclo mensual por defecto.",
+                     "El tamaño efectivo supone dependencia serial de orden 1.")),
     AnalysisStruct(
         struct_id="forecast", title="Pronóstico mensual con validación", kind="predictive", targets=(1, 1),
         requirements=Requirements(cadences=("monthly",), regular=True, min_points=60, time="years"),

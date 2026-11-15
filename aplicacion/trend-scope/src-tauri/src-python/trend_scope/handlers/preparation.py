@@ -16,6 +16,7 @@ from typing import Any, Optional
 
 import numpy as np
 
+from ..models.climate.climatology import anomalies, climatology
 from ..models.contracts import Provenance, ScientificDataset, TimeCoordinate, Transformation, VariableData
 from ..models.stats.diagnostics import lag1_autocorrelation, seasonal_strength
 from ..services.coverage import VARIABLES
@@ -270,15 +271,22 @@ def prepare(series: dict, source: Optional[dict], struct: AnalysisStruct, params
     # ---- auxiliary labels
     variables = {"y": VariableData(values, ("time",), unit)}
     groups = None
+    label_groups = None   # labels handed to group-wise methods; for annual series with constant_groups a single group
     derived: dict = {"min_count": 2, "baseline": None}
     n_years = len({day.year for day in dates})
     if cadence == "monthly":
-        groups = np.array([day.month for day in dates], dtype=np.int64)
+        groups = label_groups = np.array([day.month for day in dates], dtype=np.int64)
         variables["groups"] = VariableData(groups, ("time",), "1")
         if req.baseline_param:
             mask, info, min_count = _baseline(dates, params, req.baseline_param, min_coverage)
             variables[req.baseline_param] = VariableData(mask.astype(np.int64), ("time",), "1")
             derived["baseline"], derived["min_count"] = info, min_count
+    elif cadence == "annual" and req.constant_groups and req.baseline_param:
+        label_groups = np.ones(len(dates), dtype=np.int64)
+        variables["groups"] = VariableData(label_groups, ("time",), "1")
+        mask, info, min_count = _baseline(dates, params, req.baseline_param, min_coverage)
+        variables[req.baseline_param] = VariableData(mask.astype(np.int64), ("time",), "1")
+        derived["baseline"], derived["min_count"] = info, min_count
 
     # ---- profile
     r1 = threshold = strength = None
@@ -300,7 +308,7 @@ def prepare(series: dict, source: Optional[dict], struct: AnalysisStruct, params
         "aggregated": cadence != native, "lag1_autocorrelation": r1, "lag1_threshold": threshold,
         "seasonal_strength": strength, "unit": unit, "family": family,
     }
-    meta = {"dates": [day.isoformat() for day in dates], "groups": groups, "unit": unit, "family": family,
+    meta = {"dates": [day.isoformat() for day in dates], "groups": label_groups, "unit": unit, "family": family,
             "cadence": cadence, "time_unit": time_unit}
     dataset = ScientificDataset(
         dataset_id=str(series.get("id") or "series"), variables=variables, coordinates={},
@@ -313,3 +321,106 @@ def prepare(series: dict, source: Optional[dict], struct: AnalysisStruct, params
         quality={"missing_fraction": missing_fraction, "n_dropped": n_dropped, "n_unparsed": unparsed},
         transformations=tuple(Transformation(t["operation"], t["version"], t["parameters"]) for t in transformations))
     return Prepared(dataset, profile, transformations, issues, meta, derived)
+
+
+def prepare_group(series: dict, source: Optional[dict], companions: list, struct: AnalysisStruct, params: dict,
+                  scope: Optional[dict] = None) -> Prepared:
+    """Prepare several series on a shared regular time grid (relationship struct).
+
+    Every series is prepared on its own (same rules as `prepare`), then aligned
+    by an explicit inner join on the period index and cut to the longest
+    unbroken run of common periods. Nothing is interpolated. When asked
+    (`deseasonalize`) the monthly cycle is removed from each series with the
+    engine's climatology/anomalies functions, and the step is recorded.
+    `companions` is a list of (series, source) for targets[1:].
+    """
+    scope = scope or {}
+    members = [(series, source)] + list(companions)
+    prepared = [prepare(item, origin, struct, params, scope) for item, origin in members]
+    issues = [issue for item in prepared for issue in item.issues]
+    cadences = {item.profile["cadence"] for item in prepared}
+    if len(cadences) != 1:
+        raise HandlerError(CADENCE_INCOMPATIBLE, "Las variables tienen cadencias distintas ("
+                           + ", ".join(sorted(cadences)) + "). Usá el parámetro aggregate para llevarlas a la misma.", scope)
+    cadence = cadences.pop()
+    transformations = list(prepared[0].transformations)
+
+    columns = []
+    for item in prepared:
+        days = [date.fromisoformat(text) for text in item.meta["dates"]]
+        index = np.array([_index(cadence, day) for day in days], dtype=np.int64)
+        columns.append((index, days, item.dataset.variables["y"].values))
+    common = columns[0][0]
+    for index, _, _ in columns[1:]:
+        common = np.intersect1d(common, index)
+    if len(common) < 2:
+        raise HandlerError(INSUFFICIENT_DATA, "Las variables no comparten un período común con datos.", scope)
+    start, stop = _runs(common)
+    n_common = len(common)
+    common = common[start:stop]
+    transformations.append({"operation": "align_inner_join", "version": VERSION,
+                            "parameters": {"n_series": len(columns), "n_common": int(n_common), "kept": int(len(common))}})
+    if len(common) < n_common:
+        transformations.append({"operation": "longest_continuous_run", "version": VERSION,
+                                "parameters": {"kept": int(len(common)), "discarded": int(n_common - len(common))}})
+
+    days_by_index = dict(zip(columns[0][0].tolist(), columns[0][1]))
+    dates = [days_by_index[i] for i in common.tolist()]
+    arrays = []
+    for index, _, values in columns:
+        position = {int(i): k for k, i in enumerate(index.tolist())}
+        arrays.append(np.array([values[position[int(i)]] for i in common.tolist()], dtype=np.float64))
+
+    min_count, baseline_info = 2, None
+    if params.get("deseasonalize") and cadence == "monthly":
+        groups = np.array([day.month for day in dates], dtype=np.int64)
+        mask, baseline_info, min_count = _baseline(dates, params, req_key(struct), float(params.get("min_coverage", 0.8)))
+        try:
+            arrays = [anomalies(values, groups, climatology(values, groups, mask.astype(bool), min_count=min_count),
+                                kind="absolute")["values"] for values in arrays]
+        except ValueError as error:
+            raise HandlerError(INSUFFICIENT_DATA, f"No se pudo quitar el ciclo mensual: {error}", scope) from None
+        transformations.append({"operation": "remove_seasonal_cycle", "version": VERSION,
+                                "parameters": {"kind": "absolute", "baseline": baseline_info, "min_count": int(min_count)}})
+    elif params.get("deseasonalize"):
+        transformations.append({"operation": "remove_seasonal_cycle_skipped", "version": VERSION,
+                                "parameters": {"reason": "cadencia sin ciclo mensual"}})
+
+    idx = common - common[0]
+    if cadence == "monthly":
+        time_values, time_unit = idx.astype(np.float64), "month"
+    else:
+        time_values, time_unit = idx.astype(np.float64), "year"
+    names = ["y", "second"] + [f"control{k}" for k in range(1, len(arrays) - 1)]
+    variables = {name: VariableData(values, ("time",), prepared[k].profile["unit"])
+                 for k, (name, values) in enumerate(zip(names, arrays))}
+    expected = int(common[-1] - common[0] + 1)
+    first = prepared[0]
+    roles = [{"id": str(item_series.get("id")), "variable": item_series.get("variable"), "unit": item.profile["unit"],
+              "family": item.profile["family"], "provider": item_series.get("provider"),
+              "product": item_series.get("product"), "coordinates": item_series.get("coordinates"),
+              "location": item_series.get("location"), "role": ("first" if k == 0 else "second" if k == 1 else "control")}
+             for k, ((item_series, _), item) in enumerate(zip(members, prepared))]
+    profile = {
+        "n": int(len(dates)), "cadence": cadence, "native_cadence": first.profile["native_cadence"], "regular": True,
+        "span_years": float((dates[-1] - dates[0]).days / YEAR_DAYS), "n_years": len({day.year for day in dates}),
+        "missing_fraction": float(1 - len(dates) / max(1, expected)), "n_dropped": 0, "n_unparsed": 0,
+        "aggregated": any(item.profile["aggregated"] for item in prepared), "lag1_autocorrelation": None,
+        "lag1_threshold": None, "seasonal_strength": None, "unit": first.profile["unit"],
+        "family": first.profile["family"], "n_series": len(arrays),
+    }
+    meta = {"dates": [day.isoformat() for day in dates], "groups": None, "unit": first.profile["unit"],
+            "family": first.profile["family"], "cadence": cadence, "time_unit": time_unit, "roles": roles,
+            "controls": names[2:], "deseasonalized": baseline_info is not None}
+    provenance = first.dataset.provenance
+    dataset = ScientificDataset(
+        dataset_id=first.dataset.dataset_id, variables=variables, coordinates={}, provenance=provenance,
+        time=TimeCoordinate(time_values, time_unit, dates[0].isoformat(), "gregorian", frequency=cadence),
+        quality={"missing_fraction": profile["missing_fraction"], "n_dropped": 0, "n_unparsed": 0},
+        transformations=tuple(Transformation(t["operation"], t["version"], t["parameters"]) for t in transformations))
+    return Prepared(dataset, profile, transformations, issues, meta, {"min_count": min_count, "baseline": baseline_info})
+
+
+def req_key(struct: AnalysisStruct) -> str:
+    """Name of the reference-period parameter of a struct."""
+    return struct.requirements.baseline_param or "baseline"

@@ -116,4 +116,31 @@ def catalog_registry(*, include_optional: bool = True):
         acceleration='statsmodels/NumPy; no performance claim',
         parameter_defaults={'initial_train': 0, 'max_origins': 24, 'level': 0.90, 'min_residuals': 10, 'min_count': 3}),
         analyze_forecast)
+    from .stats.lagged import analyze_lagged_correlation, analyze_partial_correlation
+    registry.register(MethodSpec(
+        method_id='lagged_correlation', name='Lagged correlation', version='1.0.0-candidate',
+        category='stats', output_kind='estimate', dimensions=(('time',),), min_observations=8,
+        minimum_reason='At least 4 pairs must remain at the largest explicit |lag|; fewer than one effective degree of freedom is reported as not testable',
+        regularity='regular grid; both series complete and on the same time coordinate',
+        parameters=('second_variable', 'lags'), dependencies=('numpy', 'scipy'),
+        complexity='O(n) per lag', acceleration='NumPy; no performance claim'),
+        analyze_lagged_correlation)
+    registry.register(MethodSpec(
+        method_id='partial_correlation', name='Partial correlation', version='1.0.0-candidate',
+        category='stats', output_kind='estimate', dimensions=(('time',),), min_observations=8,
+        minimum_reason='Needs more than controls + 5 observations; the t test needs at least one effective degree of freedom',
+        regularity='regular grid; all series complete and on the same time coordinate',
+        parameters=('second_variable', 'controls'), dependencies=('numpy', 'scipy'),
+        complexity='O(n k^2) for k controls', acceleration='NumPy least squares; no performance claim'),
+        analyze_partial_correlation)
+    from .climate.events import analyze_detect_events
+    registry.register(MethodSpec(
+        method_id='detect_events', name='Threshold-exceedance events', version='1.0.0-candidate',
+        category='climate', output_kind='events', dimensions=(('time',),), min_observations=4,
+        minimum_reason='Each group needs min_count baseline observations for its percentile threshold',
+        regularity='regular grid; no missing values; groups and baseline are dataset variable IDs',
+        parameters=('groups', 'baseline', 'q', 'min_count', 'direction', 'min_duration'),
+        dependencies=('numpy',), complexity='O(n log n) time; O(n) memory',
+        acceleration='NumPy; no performance claim'),
+        analyze_detect_events)
     return registry

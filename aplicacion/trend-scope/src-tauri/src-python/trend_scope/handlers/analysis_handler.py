@@ -107,6 +107,10 @@ def resolve(spec: AnalysisSpec) -> ResolvedAnalysis:
     unknown = sorted(set(spec.params) - set(struct.params))
     if unknown:
         raise HandlerError(INVALID_REQUEST, f"Parámetros desconocidos para {struct.struct_id}: {', '.join(unknown)}.", scope)
+    missing = [name for name, definition in struct.params.items() if definition.required and spec.params.get(name) is None]
+    if missing:
+        raise HandlerError(INVALID_REQUEST, "Falta el parámetro obligatorio " + ", ".join(missing) + ": la investigación "
+                           "científica no fija un valor por defecto, hay que indicarlo explícitamente.", scope)
     effective = {}
     for name, definition in struct.params.items():
         value = spec.params.get(name, definition.default)
@@ -133,6 +137,22 @@ def resolve(spec: AnalysisSpec) -> ResolvedAnalysis:
             if h.operator is None or h.value is None:
                 raise HandlerError(INVALID_REQUEST, "La hipótesis threshold requiere operator y value.", scope)
             hypothesis.setdefault("statistic", "last")
+        if h.kind == "relationship":
+            hypothesis.setdefault("sign", "any")
+            asked = hypothesis.get("lags")
+            if asked is not None:
+                outside = sorted(set(asked) - set(effective.get("lags") or []))
+                if outside:
+                    raise HandlerError(INVALID_REQUEST, "Los desfases de la hipótesis deben estar entre los evaluados "
+                                       f"(params.lags); faltan: {outside}.", scope)
+        if h.kind == "change_point" and h.window is not None:
+            try:
+                start, end = _iso(h.window.get("start"), "window.start"), _iso(h.window.get("end"), "window.end")
+            except ValueError as error:
+                raise HandlerError(INVALID_REQUEST, str(error), scope) from None
+            if start >= end:
+                raise HandlerError(INVALID_REQUEST, "window.start debe ser anterior a window.end.", scope)
+            hypothesis["window"] = {"start": start.isoformat(), "end": end.isoformat()}
     return ResolvedAnalysis(spec.id, struct, effective, hypothesis)
 
 
@@ -179,7 +199,8 @@ def capabilities() -> dict:
             "available": reason is None, "reason": reason,
             "targets": {"min": struct.targets[0], "max": struct.targets[1]},
             "params": {name: {"type": p.type, "default": p.default, "minimum": p.minimum, "maximum": p.maximum,
-                              "choices": list(p.choices), "provisional": p.provisional, "description": p.description}
+                              "choices": list(p.choices), "provisional": p.provisional, "required": p.required,
+                              "description": p.description}
                        for name, p in struct.params.items()},
             "hypotheses": list(struct.hypotheses),
             "methods": sorted({c.method_id for step in struct.steps for c in step.candidates}),

@@ -82,7 +82,8 @@ def _acquire(investigation: dict, ids: list) -> tuple:
     return series, errors
 
 
-def _analyze_one(spec, resolved, series: Optional[dict], source: dict, source_error: Optional[str], options) -> dict:
+def _analyze_one(spec, resolved, series: Optional[dict], source: dict, source_error: Optional[str], options,
+                 companions: Optional[list] = None) -> dict:
     struct = resolved.struct
     scope = {"analysis_id": spec.id}
     block = {"id": spec.id, "struct": struct.struct_id, "kind": struct.kind, "status": "failed",
@@ -93,7 +94,10 @@ def _analyze_one(spec, resolved, series: Optional[dict], source: dict, source_er
         block["errors"].append(error_item(SOURCE_ERROR, source_error or "La fuente no devolvió datos.", scope))
         return block
     try:
-        prepared = preparation.prepare(series, source, struct, resolved.params, scope)
+        if companions:
+            prepared = preparation.prepare_group(series, source, companions, struct, resolved.params, scope)
+        else:
+            prepared = preparation.prepare(series, source, struct, resolved.params, scope)
     except HandlerError as error:
         block["errors"].append(error.to_dict())
         return block
@@ -123,6 +127,18 @@ def _analyze_one(spec, resolved, series: Optional[dict], source: dict, source_er
     elif completed:
         block["status"] = "partial"
     return block
+
+
+def _analyze_many(spec, resolved, series_by_id: dict, sources: dict, source_errors: dict, options) -> dict:
+    """Analysis over several variables (relationship): every target must have been acquired."""
+    missing = [target for target in spec.targets if series_by_id.get(target) is None]
+    first = spec.targets[0]
+    if missing:
+        message = "; ".join(f"{target}: {source_errors.get(target) or source_errors.get('*') or 'sin datos'}"
+                            for target in missing)
+        return _analyze_one(spec, resolved, None, sources[first], message, options)
+    companions = [(series_by_id[target], sources[target]) for target in spec.targets[1:]]
+    return _analyze_one(spec, resolved, series_by_id[first], sources[first], None, options, companions)
 
 
 def _analyze_pattern(spec, resolved, sample_ids: list, series_by_id: dict, sources: dict, source_errors: dict, request) -> dict:
@@ -173,6 +189,16 @@ def _analyze_pattern(spec, resolved, sample_ids: list, series_by_id: dict, sourc
             "errors": [e for b in blocks for e in b["errors"]]}
 
 
+def _shrink(value, keep: int = 5):
+    """Keep the first `keep` items of long lists (events, lags, segments) in the assistant digest."""
+    if isinstance(value, dict):
+        return {key: _shrink(item, keep) for key, item in value.items()}
+    if isinstance(value, list):
+        short = [_shrink(item, keep) for item in value[:keep]]
+        return short + [{"omitted_items": len(value) - keep}] if len(value) > keep else short
+    return value
+
+
 def _digest(document: dict) -> dict:
     """Compact, array-free summary for the assistant."""
     def build(level: int) -> dict:
@@ -182,6 +208,7 @@ def _digest(document: dict) -> dict:
             for finding in block.get("findings", []):
                 if level >= 2:
                     keep = {k: finding.get(k) for k in ("type", "how_much", "significant", "p_value", "statement_key")}
+                    keep["how_much"] = _shrink(keep["how_much"])
                 elif level == 1:
                     keep = {k: v for k, v in finding.items() if k != "limitations"}
                 else:
@@ -252,6 +279,8 @@ def _run(raw: dict) -> dict:
         try:
             if spec.id in expansions:
                 block = _analyze_pattern(spec, item, expansions[spec.id], series_by_id, sources, source_errors, request)
+            elif len(spec.targets) > 1:
+                block = _analyze_many(spec, item, series_by_id, sources, source_errors, request.options)
             else:
                 block = _analyze_one(spec, item, series, sources[target], message, request.options)
         except Exception as error:  # an analysis must never take down the response

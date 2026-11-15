@@ -25,7 +25,18 @@ Rutas: `PY/` = `trend_scope/` · `M/` = `PY/models/`.
 | Fase 3 · handlers | structs `forecast` y `spatial_pattern`; `spatial.py` (muestreo de puntos en un polígono); bloque `forecast` y veredicto `forecast_threshold` en `decision.py`; `_analyze_pattern` (tendencia por punto + FDR) en `data_handler.py`; topes provisionales de horizonte en `analysis_handler.check` |
 | Fase 4 · librerías sin registrar | W19 `signal/convolution2d.py`, W10 `climate/etccdi.py`, W11 `stats/bootstrap.py`, W12 `fire/fwi.py`, W14 `vegetation/burn_indices.py`, W15 `landcover/transitions.py`, W16 `atmosphere/hypsometric.py` |
 
-Structs disponibles: `describe`, `trend_significance`, `anomaly`, `drought_spi`, `regression_fit`, `forecast`, `spatial_pattern`. Los de la fase 2 (`seasonality`, `change_point`, `smoothing`, `extreme_events`, `relationship`) siguen declarados con `planned=True` y `list_analyses` los informa `available: false`. **La fase 2 no se hizo**: faltan W05 (correlación con desfases), W04 (percentiles y eventos) y los structs que las usan.
+**Fase 2 (2026-11-15), también sin ejecutar ni verificar:**
+
+| Hecho | Archivos |
+|---|---|
+| Cálculo | `M/stats/lagged.py` (W05) y `M/climate/events.py` (W04); métodos registrados `lagged_correlation`, `partial_correlation`, `detect_events` |
+| Handlers | structs `seasonality`, `change_point`, `smoothing`, `extreme_events`, `relationship` (ya sin `planned`); `ParamSpec.required` y `Requirements.constant_groups`; `preparation.prepare_group` (varias series); `_analyze_many` en `data_handler.py`; builders de `decision.py`; condición `has_controls` y token `@controls` en `algorithm_handler.py`; validación de hipótesis `relationship` y `change_point` en `analysis_handler.resolve` |
+
+Structs declarados: `describe`, `trend_significance`, `anomaly`, `drought_spi`, `regression_fit`, `forecast`, `spatial_pattern`, `seasonality`, `change_point`, `smoothing`, `extreme_events`, `relationship`. `list_analyses` informa `available: false` con el motivo si falta un método (p. ej. `pelt` sin `ruptures`).
+
+Valores obligatorios sin default (`required`): `penalty`, `window`, `q`, `min_duration`, `lags`. Provisionales nuevos: `harmonics` 2, `min_size` 6, `components` [0].
+
+Desvíos de la fase 2: `fdr_bh` lo aplica `decision.py` (no es un paso registrado); sin candidato `cusum` en `change_point`; `relationship` toma `targets[0]` como variable que antecede, `targets[1]` como respuesta y `targets[2:]` como controles de la correlación parcial (desfase 0); `roles` del request se ignora.
 
 Las librerías de la fase 4 son API de Python: no están registradas en `catalog_registry` (necesitan adaptadores de contrato propio: rejillas 2D, series diarias con etiquetas) ni las usa ningún struct todavía. `fire/fwi.py` rechaza latitudes con |lat| < 30° (no se inventaron factores de duración del día tropicales) y no se comparó contra tablas publicadas.
 
@@ -120,7 +131,7 @@ Un struct cuyo requisito todavía no existe se declara igual y `capabilities()` 
 |---|---|---|
 | 0 | En `M/`: corrección de `robust_z` (factor 1.4826, ver `M/AGENTS.md` W01) | Aplicada |
 | 1 | `contracts.py` → `analysis_structs.py` → `analysis_handler.py` → W17 y W18 en `M/` → `preparation.py` → `algorithm_handler.py` → `decision.py` → `data_handler.py` → comandos en `desktop.py`. Structs de fase 1 | Recorrido request → response implementado |
-| 2 | W06, W05, W04 en `M/`; structs de fase 2 | Structs de fase 2 implementados |
+| 2 | W06, W05, W04 en `M/`; structs de fase 2 | Hecha (2026-11-15), sin ejecutar |
 | 3 | W07, W08, W09, W20, W13 en `M/forecasting/`; struct `forecast`; muestreo de área y `spatial_pattern` | Se entrega el baseline cuando no hay habilidad |
 | 4 | W19 y W10–W16 | Cola de `M/AGENTS.md` |
 
