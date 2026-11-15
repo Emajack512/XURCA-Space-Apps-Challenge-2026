@@ -104,4 +104,16 @@ def catalog_registry(*, include_optional: bool = True):
         parameters=('quantiles',), dependencies=('numpy',),
         complexity='O(n log n) time; O(n) memory',
         acceleration='NumPy; no performance claim'), analyze_describe)
+    from .forecasting.pipeline import analyze_forecast
+    registry.register(MethodSpec(
+        method_id='forecast_backtest', name='Backtested monthly forecast', version='1.0.0-candidate',
+        category='stats', output_kind='forecast', dimensions=(('time',),), min_observations=48,
+        minimum_reason='Needs enough history for a training window plus out-of-sample origins; the handler checks the series length',
+        regularity='regular monthly grid; no missing values; groups = calendar month (1-12)',
+        parameters=('groups', 'horizon', 'period', 'initial_train', 'max_origins', 'level', 'min_residuals', 'min_count'),
+        dependencies=('numpy', 'statsmodels (optional candidates)'),
+        complexity='one model fit per origin and candidate; origins capped by max_origins',
+        acceleration='statsmodels/NumPy; no performance claim',
+        parameter_defaults={'initial_train': 0, 'max_origins': 24, 'level': 0.90, 'min_residuals': 10, 'min_count': 3}),
+        analyze_forecast)
     return registry

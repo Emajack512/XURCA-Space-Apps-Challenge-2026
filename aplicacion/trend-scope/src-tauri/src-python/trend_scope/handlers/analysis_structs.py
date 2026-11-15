@@ -73,6 +73,7 @@ class AnalysisStruct:
     steps: tuple
     charts: tuple
     phase: int = 1
+    planned: bool = False
     description: str = ""
     limitations: tuple = ()
 
@@ -200,36 +201,72 @@ STRUCTS: tuple = (
     AnalysisStruct(
         struct_id="seasonality", title="Estacionalidad", kind="mathematical", targets=(1, 1),
         requirements=Requirements(cadences=("monthly",), regular=True, min_points=24), params=_common(),
-        hypotheses=(), steps=(Step("harmonic", (Candidate("harmonic"),)),), charts=("decomposition",), phase=2),
+        hypotheses=(), steps=(Step("harmonic", (Candidate("harmonic"),)),), charts=("decomposition",), phase=2, planned=True),
     AnalysisStruct(
         struct_id="change_point", title="Cambios de régimen", kind="statistical", targets=(1, 1),
         requirements=Requirements(cadences=("monthly", "annual"), regular=True, min_points=24), params=_common(),
         hypotheses=("change_point",), steps=(Step("segments", (Candidate("pelt"), Candidate("cusum"))),),
-        charts=("change_points",), phase=2),
+        charts=("change_points",), phase=2, planned=True),
     AnalysisStruct(
         struct_id="smoothing", title="Suavizado", kind="mathematical", targets=(1, 1),
         requirements=Requirements(regular=True, min_points=4), params=_common(),
         hypotheses=(), steps=(Step("smooth", (Candidate("moving_average"), Candidate("ssa"))),),
-        charts=("timeseries",), phase=2),
+        charts=("timeseries",), phase=2, planned=True),
     AnalysisStruct(
         struct_id="extreme_events", title="Eventos extremos", kind="statistical", targets=(1, 1),
         requirements=Requirements(min_points=24), params=_common(), hypotheses=("threshold",),
-        steps=(Step("events", (Candidate("detect_events"),)),), charts=("table",), phase=2),
+        steps=(Step("events", (Candidate("detect_events"),)),), charts=("table",), phase=2, planned=True),
     AnalysisStruct(
         struct_id="relationship", title="Asociación entre variables", kind="statistical", targets=(2, 4),
         requirements=Requirements(regular=True, min_points=24), params=_common(), hypotheses=("relationship",),
         steps=(Step("lags", (Candidate("lagged_correlation"),)), Step("fdr", (Candidate("fdr_bh"),))),
-        charts=("scatter_lag",), phase=2),
+        charts=("scatter_lag",), phase=2, planned=True),
     AnalysisStruct(
-        struct_id="forecast", title="Pronóstico", kind="predictive", targets=(1, 1),
-        requirements=Requirements(cadences=("monthly",), regular=True, min_points=48),
-        params=_common(horizon=ParamSpec("int", 6, 1, 24, provisional=True)),
+        struct_id="forecast", title="Pronóstico mensual con validación", kind="predictive", targets=(1, 1),
+        requirements=Requirements(cadences=("monthly",), regular=True, min_points=60, time="years"),
+        params=_common(
+            gap_policy=ParamSpec("str", "longest_run", choices=("drop", "longest_run"),
+                                 description="El pronóstico exige meses consecutivos"),
+            horizon=ParamSpec("int", 6, 1, 24, provisional=True, description="Pasos (meses) a pronosticar"),
+            level=ParamSpec("float", 0.90, 0.5, 0.99, description="Nivel nominal del intervalo predictivo"),
+            max_origins=ParamSpec("int", 24, 4, 200, provisional=True, description="Orígenes máximos del backtest"),
+            min_residuals=ParamSpec("int", 10, 3, 200, provisional=True,
+                                    description="Residuos mínimos por paso para calibrar el intervalo"),
+            initial_train=ParamSpec("int", 0, 0, 100000, provisional=True,
+                                    description="Meses de entrenamiento inicial (0 = automático)"),
+            baseline_min_count=ParamSpec("int", 3, 2, 50, provisional=True,
+                                         description="Años mínimos por mes para la referencia climatológica")),
         hypotheses=("forecast_threshold",),
-        steps=(Step("backtest", (Candidate("rolling_origin"),)),), charts=("forecast_fan",), phase=3),
-    AnalysisStruct(
-        struct_id="spatial_pattern", title="Patrón espacial", kind="statistical", targets=(2, 25),
-        requirements=Requirements(min_points=24), params=_common(), hypotheses=(),
-        steps=(Step("per_cell", (Candidate("fdr_bh"),)),), charts=("map_points",), phase=3),
+        steps=(Step("forecast", (Candidate(
+            "forecast_backtest", "always",
+            {"groups": "groups", "horizon": "$horizon", "period": 12, "initial_train": "$initial_train",
+             "max_origins": "$max_origins", "level": "$level", "min_residuals": "$min_residuals",
+             "min_count": "$baseline_min_count"},
+            "Candidatos contra referencias (climatología y persistencia), con backtest de origen móvil"),),
+            "Pronóstico con backtest"),),
+        charts=("forecast_fan",),
+        description="Pronóstico estadístico de la serie. Se entrega la referencia si ningún modelo la supera.",
+        limitations=("Es un pronóstico estadístico de una sola serie, sin predictores físicos ni escenarios.",
+                     "El desempeño pasado no garantiza el futuro; los cambios de régimen no se modelan.",
+                     "Solo se declara 'validado' con habilidad positiva fuera de muestra e intervalo con cobertura medida.")),
 )
 
 BY_ID: Mapping = {item.struct_id: item for item in STRUCTS}
+
+
+# spatial_pattern reuses the trend struct on a lattice of points inside a polygon.
+import dataclasses as _dc
+
+_trend = BY_ID["trend_significance"]
+SPATIAL = _dc.replace(
+    _trend, struct_id="spatial_pattern", title="Patrón espacial de tendencias (muestra de puntos)",
+    params={**_trend.params,
+            "area_feature_id": ParamSpec("str", None, description="Id del polígono en geography.selection; por defecto el único"),
+            "n_points": ParamSpec("int", 9, 4, 25, provisional=True, description="Puntos de la muestra dentro del polígono")},
+    hypotheses=(), charts=("map_points",), phase=3,
+    description="Tendencia en una retícula de puntos dentro de un polígono, con control de falsos descubrimientos.",
+    limitations=("Es una muestra de puntos, no un promedio zonal ni un ráster.",
+                 "Los puntos vecinos no son independientes: el control de falsos descubrimientos es aproximado.",
+                 *_trend.limitations))
+STRUCTS = STRUCTS + (SPATIAL,)
+BY_ID = {item.struct_id: item for item in STRUCTS}

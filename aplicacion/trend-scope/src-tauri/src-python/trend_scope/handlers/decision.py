@@ -14,6 +14,7 @@ Fixed rules:
 from __future__ import annotations
 
 import math
+from datetime import date
 from typing import Any, Optional
 
 import numpy as np
@@ -256,12 +257,89 @@ def _fit(ctx) -> dict:
             "charts": [{"kind": "timeseries", "series_ref": ctx["series"].get("id"), "fit_step": "fit"}]}
 
 
+def _add_months(day: date, count: int) -> date:
+    index = day.year * 12 + day.month - 1 + count
+    return date(index // 12, index % 12 + 1, 1)
+
+
+def _forecast(ctx) -> dict:
+    step = _step(ctx["steps"], "forecast")
+    prepared, hypothesis = ctx["prepared"], ctx["hypothesis"]
+    if step is None:
+        return {"findings": [_gap("forecast", ctx["series"], ctx["source"], prepared, ctx["steps"],
+                                  "No se pudo generar el pronóstico.")],
+                "verdict": _verdict_forecast(hypothesis, None), "charts": [], "forecast": None}
+    p = step.payload
+    unit = prepared.meta["unit"]
+    last = date.fromisoformat(prepared.meta["dates"][-1])
+    central = [float(v) for v in p["central"]]
+    times = [_add_months(last, i).isoformat() for i in range(1, len(central) + 1)]
+    lower = [_f(v) for v in p["lower"]]
+    upper = [_f(v) for v in p["upper"]]
+    has_interval = any(v is not None for v in lower)
+    interval = p["interval"]
+    block = {
+        "mode": p["mode"], "model": p["model"], "delivered": p["delivered"], "unit": unit,
+        "issue_date": prepared.meta["dates"][-1], "times": times, "central": central, "central_kind": "point_forecast",
+        "interval": ({"level": interval["level"], "lower": lower, "upper": upper,
+                      "empirical_coverage": interval["empirical_coverage"], "calibrated": interval["calibrated"],
+                      "kind": "predictive"} if has_interval else None),
+        "baseline": {"name": p["best_baseline"], "values": [float(v) for v in p["baseline_values"]]},
+        "skill_vs_baseline": [_f(v) for v in p["skill_vs_best_baseline"]],
+        "horizon_requested": p["horizon_requested"], "horizon_validated": p["horizon_validated"],
+        "not_superior_to_baseline": p["not_superior_to_baseline"],
+        "backtest": {"n_origins": p["backtest"]["n_origins"], "initial_train": p["backtest"]["initial_train"],
+                     "design": p["backtest"]["design"]},
+        "uncertainty": p["uncertainty"],
+        "assumptions": ["Pronóstico estadístico de la serie; no incluye predictores físicos ni escenarios."],
+    }
+    finding = _finding(
+        "forecast", ctx["series"], ctx["source"], prepared,
+        how_much={"horizon_steps": len(central), "unit": unit, "first": central[0], "last": central[-1],
+                  "model": p["model"], "delivered": p["delivered"], "mode": p["mode"],
+                  "horizon_validated": p["horizon_validated"]},
+        conclusiveness="validated" if p["mode"] == "validated_forecast" else "exploratory",
+        statement_key=f"forecast.{p['mode']}", notes=list(p["warnings"]),
+        limitations=["Es un pronóstico estadístico de una sola serie.",
+                     "El intervalo es predictivo (valores futuros), no un intervalo de confianza de un parámetro.",
+                     "El desempeño pasado no garantiza el futuro."])
+    finding["not_superior_to_baseline"] = p["not_superior_to_baseline"]
+    return {"findings": [finding], "verdict": _verdict_forecast(hypothesis, block), "forecast": block,
+            "charts": [{"kind": "forecast_fan", "series_ref": ctx["series"].get("id")}]}
+
+
+def _verdict_forecast(hypothesis: Optional[dict], block: Optional[dict]) -> Optional[dict]:
+    if hypothesis is None:
+        return None
+    base = {"hypothesis": hypothesis}
+    if block is None:
+        return {**base, "status": "not_testable", "reason_key": "verdict.not_testable", "evidence": {}}
+    index = hypothesis["at_step"] - 1
+    compare = OPERATORS[hypothesis["operator"]]
+    value = float(hypothesis["value"])
+    central = block["central"][index]
+    evidence = {"central": central, "operator": hypothesis["operator"], "value": value, "at_step": hypothesis["at_step"],
+                "date": block["times"][index], "mode": block["mode"]}
+    interval = block["interval"]
+    if interval and interval["lower"][index] is not None and interval["upper"][index] is not None:
+        inside = [compare(interval["lower"][index], value), compare(interval["upper"][index], value)]
+        evidence.update({"lower": interval["lower"][index], "upper": interval["upper"][index],
+                         "interval_calibrated": interval["calibrated"]})
+        status = "supported" if all(inside) else "not_supported" if not any(inside) else "inconclusive"
+    else:
+        status = "supported" if compare(central, value) else "not_supported"
+        evidence["descriptive_only"] = True
+    if block["mode"] != "validated_forecast" and status == "supported":
+        evidence["caveat"] = "pronóstico no validado: la condición se cumple solo en la estimación central"
+    return {**base, "status": status, "reason_key": f"verdict.forecast.{status}", "evidence": evidence}
+
+
 def _plain(mapping) -> dict:
     return {str(k): _f(v) if isinstance(v, (int, float)) else v for k, v in dict(mapping).items()}
 
 
 BUILDERS = {"describe": _describe, "trend_significance": _trend, "anomaly": _anomaly,
-            "drought_spi": _spi, "regression_fit": _fit}
+            "drought_spi": _spi, "regression_fit": _fit, "forecast": _forecast}
 
 
 def build(struct, params: dict, steps: list, prepared, series: dict, source: Optional[dict],

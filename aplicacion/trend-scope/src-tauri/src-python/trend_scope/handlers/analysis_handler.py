@@ -13,11 +13,15 @@ from datetime import date
 from typing import Any, Optional
 
 from .algorithm_handler import available_methods
-from .analysis_structs import BY_ID, IMPLEMENTED_PHASE, STRUCTS, AnalysisStruct, ParamSpec
+from .analysis_structs import BY_ID, STRUCTS, AnalysisStruct, ParamSpec
 from .contracts import (
     BUDGET_EXCEEDED, CADENCE_INCOMPATIBLE, HANDLER_VERSION, INSUFFICIENT_DATA, INVALID_REQUEST,
     IRREGULAR_SERIES, METHOD_NOT_AVAILABLE, UNKNOWN_STRUCT, AnalysisSpec, HandlerError, error_item,
 )
+
+
+# Provisional horizon caps per cadence (decision D-21 pending), in steps of that cadence.
+HORIZON_CAPS = {"monthly": 12, "daily": 14, "annual": 5}
 
 
 @dataclass(frozen=True)
@@ -29,7 +33,7 @@ class ResolvedAnalysis:
 
 
 def unavailable_reason(struct: AnalysisStruct) -> Optional[str]:
-    if struct.phase > IMPLEMENTED_PHASE:
+    if struct.planned:
         return f"Planificado para la fase {struct.phase}; todavía no está implementado."
     methods = available_methods()
     for step in struct.steps:
@@ -119,6 +123,12 @@ def resolve(spec: AnalysisSpec) -> ResolvedAnalysis:
         hypothesis = h.model_dump(exclude_none=True)
         if h.kind == "trend":
             hypothesis.setdefault("direction", "any")
+        if h.kind == "forecast_threshold":
+            if h.operator is None or h.value is None:
+                raise HandlerError(INVALID_REQUEST, "La hipótesis forecast_threshold requiere operator y value.", scope)
+            hypothesis.setdefault("at_step", effective.get("horizon") or 1)
+            if hypothesis["at_step"] > (effective.get("horizon") or 1):
+                raise HandlerError(INVALID_REQUEST, "at_step no puede superar el horizonte pedido.", scope)
         if h.kind == "threshold":
             if h.operator is None or h.value is None:
                 raise HandlerError(INVALID_REQUEST, "La hipótesis threshold requiere operator y value.", scope)
@@ -146,6 +156,13 @@ def check(struct: AnalysisStruct, params: dict, profile: dict, scope: Optional[d
     if req.max_points and n > req.max_points:
         issues.append(error_item(BUDGET_EXCEEDED, f"La serie tiene {n} observaciones y el límite es {req.max_points}. "
                                  "Agregá a una cadencia menor (aggregate).", scope))
+    horizon = params.get("horizon")
+    if horizon:
+        cap = min(HORIZON_CAPS.get(cadence, 1), int(n * 0.2))
+        if horizon > cap:
+            issues.append(error_item(INSUFFICIENT_DATA, f"El horizonte pedido ({horizon}) supera el máximo permitido "
+                                     f"para esta serie ({cap}: el menor entre el tope de la cadencia y el 20 % de las "
+                                     "observaciones; valores provisionales).", scope))
     return issues
 
 
