@@ -30,9 +30,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 }
 .app-shell button.outlined{border-color:var(--line);background:var(--surface)}
 .app-shell button.icon-button{padding:4px;min-width:26px;min-height:26px}
-input:not([type=checkbox]),select,textarea{width:100%;min-width:0;border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:7px;padding:6px 8px}
+input:not([type=checkbox]):not([type=radio]),select,textarea{width:100%;min-width:0;border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:7px;padding:6px 8px}
 input[type=range]{accent-color:var(--accent)}
-input[type=checkbox]{accent-color:var(--accent);margin:0}
+input[type=checkbox],input[type=radio]{accent-color:var(--accent);margin:0}
 input[type=color]{max-width:42px;height:30px;padding:3px}
 textarea{resize:vertical}
 small,.quiet{color:var(--muted)}

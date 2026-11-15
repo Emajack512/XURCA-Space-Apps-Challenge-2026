@@ -12,6 +12,20 @@ function pValue(value) {
   return value < 0.001 ? '< 0,001' : value.toLocaleString('es-AR', { maximumSignificantDigits: 2 });
 }
 
+// Display-only labels: the backend keeps its unit codes and method ids.
+export function unit(value) {
+  if (!value) return '';
+  return String(value).split('/').map(part => ({ C: '°C', K: 'K', decade: 'década', year: 'año', day: 'día', month: 'mes' })[part] ?? part).join('/');
+}
+
+const testLabels = {
+  modified_mann_kendall: 'Mann-Kendall modificado',
+  mann_kendall: 'Mann-Kendall',
+  theil_sen: 'Theil-Sen',
+  ols: 'mínimos cuadrados'
+};
+const testName = test => testLabels[test] ?? test;
+
 const statusLabels = {
   completed: 'Completado', partial: 'Parcial', failed: 'Con errores', skipped: 'Omitido'
 };
@@ -71,7 +85,7 @@ const FINDINGS = {
     const h = finding.how_much;
     return {
       headline: `Resumen de ${variable(finding)}`,
-      lines: [`${h.n} observaciones · media ${fmt(h.mean)} ${h.unit} · desvío ${fmt(h.std)}`,
+      lines: [`${h.n} observaciones · media ${fmt(h.mean)} ${unit(h.unit)} · desvío ${fmt(h.std)}`,
         `Mínimo ${fmt(h.minimum)} · máximo ${fmt(h.maximum)}`,
         'Cuantiles: ' + Object.entries(h.quantiles ?? {}).map(([q, v]) => `${Number(q) * 100}% = ${fmt(v)}`).join(' · ')]
     };
@@ -85,17 +99,17 @@ const FINDINGS = {
         ? `Tendencia ${direction} estadísticamente significativa`
         : 'No hay evidencia suficiente de una tendencia',
       lines: [
-        `Pendiente estimada: ${fmt(h.per_decade)} ${h.unit} (intervalo de confianza ${fmt(h.interval.level * 100, 3)}%: ${fmt(h.interval.lower)} a ${fmt(h.interval.upper)})`,
-        `Cambio total estimado en ${fmt(h.span_years, 3)} años: ${fmt(h.total_change)} ${h.total_change_unit}`,
-        `p = ${pValue(finding.p_value)} (α = ${fmt(finding.alpha)}) · prueba: ${finding.test}`]
+        `Pendiente estimada: ${fmt(h.per_decade)} ${unit(h.unit)} (intervalo de confianza ${fmt(h.interval.level * 100, 3)}%: ${fmt(h.interval.lower)} a ${fmt(h.interval.upper)})`,
+        `Cambio total estimado en ${fmt(h.span_years, 3)} años: ${fmt(h.total_change)} ${unit(h.total_change_unit)}`,
+        `p = ${pValue(finding.p_value)} (α = ${fmt(finding.alpha)}) · prueba: ${testName(finding.test)}`]
     };
   },
   anomaly(finding) {
     const h = finding.how_much;
     return {
       headline: 'Anomalías respecto de la referencia',
-      lines: [`Última (${h.last_date}): ${fmt(h.last)} ${h.unit}`, `Mayor en valor absoluto (${h.largest_date}): ${fmt(h.largest)} ${h.unit}`,
-        `Promedio de las anomalías: ${fmt(h.mean)} ${h.unit} · ${h.n} observaciones`]
+      lines: [`Última (${h.last_date}): ${fmt(h.last)} ${unit(h.unit)}`, `Mayor en valor absoluto (${h.largest_date}): ${fmt(h.largest)} ${unit(h.unit)}`,
+        `Promedio de las anomalías: ${fmt(h.mean)} ${unit(h.unit)} · ${h.n} observaciones`]
     };
   },
   index(finding) {
@@ -109,8 +123,8 @@ const FINDINGS = {
   fit(finding) {
     const h = finding.how_much;
     const lines = [`Modelo: ${h.model}`];
-    if (h.slope_per_year !== undefined) lines.push(`Pendiente: ${fmt(h.slope_per_year)} ${h.slope_unit}`);
-    if (h.metrics?.r2 !== null && h.metrics?.r2 !== undefined) lines.push(`R² = ${fmt(h.metrics.r2)} · RMSE = ${fmt(h.metrics.rmse)} ${h.unit}`);
+    if (h.slope_per_year !== undefined) lines.push(`Pendiente: ${fmt(h.slope_per_year)} ${unit(h.slope_unit)}`);
+    if (h.metrics?.r2 !== null && h.metrics?.r2 !== undefined) lines.push(`R² = ${fmt(h.metrics.r2)} · RMSE = ${fmt(h.metrics.rmse)} ${unit(h.unit)}`);
     return { headline: 'Ajuste del modelo (descriptivo)', lines };
   },
   forecast(finding) {
@@ -119,7 +133,7 @@ const FINDINGS = {
     return {
       headline: validated ? 'Pronóstico validado fuera de muestra' : 'Pronóstico exploratorio (no validado)',
       lines: [`Modelo entregado: ${h.model}${finding.not_superior_to_baseline ? ' (ningún candidato superó a la referencia)' : ''}`,
-        `${h.horizon_steps} pasos: de ${fmt(h.first)} a ${fmt(h.last)} ${h.unit}`,
+        `${h.horizon_steps} pasos: de ${fmt(h.first)} a ${fmt(h.last)} ${unit(h.unit)}`,
         `Horizonte validado: ${h.horizon_validated ?? '—'} pasos`]
     };
   },
@@ -127,13 +141,13 @@ const FINDINGS = {
     const h = finding.how_much;
     const lines = [`Ajuste armónico de ${h.harmonics} armónico(s), período de ${h.period}${h.r2 !== null ? ` · R² = ${fmt(h.r2)}` : ''}`];
     if (h.seasonal_strength !== null && h.seasonal_strength !== undefined) lines.push(`Fracción de la varianza explicada por el ciclo mensual: ${fmt(h.seasonal_strength * 100, 3)}%`);
-    if (h.annual_bin) lines.push(`Amplitud del espectro en el ciclo anual: ${fmt(h.annual_bin.amplitude)} ${h.unit}`);
-    if (h.stl_seasonal_range !== null) lines.push(`Rango del componente estacional (STL): ${fmt(h.stl_seasonal_range)} ${h.unit}`);
+    if (h.annual_bin) lines.push(`Amplitud del espectro en el ciclo anual: ${fmt(h.annual_bin.amplitude)} ${unit(h.unit)}`);
+    if (h.stl_seasonal_range !== null) lines.push(`Rango del componente estacional (STL): ${fmt(h.stl_seasonal_range)} ${unit(h.unit)}`);
     return { headline: 'Estacionalidad de la serie', lines };
   },
   change_point(finding) {
     const h = finding.how_much;
-    const lines = h.changes.map(c => `${c.date}: la media pasa de ${fmt(c.mean_before)} a ${fmt(c.mean_after)} ${h.unit} (cambio de ${fmt(c.shift)})`);
+    const lines = h.changes.map(c => `${c.date}: la media pasa de ${fmt(c.mean_before)} a ${fmt(c.mean_after)} ${unit(h.unit)} (cambio de ${fmt(c.shift)})`);
     return {
       headline: h.n_changes ? `${h.n_changes} cambio(s) de régimen detectado(s)` : 'No se detectaron cambios con esta penalización (no hay evidencia suficiente; no significa que no los haya)',
       lines: lines.length ? lines : [`Penalización ${fmt(h.penalty)} · tamaño mínimo de tramo ${h.min_size} pasos`]
@@ -143,17 +157,17 @@ const FINDINGS = {
     const h = finding.how_much;
     return {
       headline: `Serie suavizada (${h.method === 'ssa' ? 'SSA' : 'media móvil causal'}, ventana ${h.window})`,
-      lines: [`${h.n_smoothed} de ${h.n_input} valores · mínimo ${fmt(h.minimum)} · máximo ${fmt(h.maximum)} ${h.unit}`]
+      lines: [`${h.n_smoothed} de ${h.n_input} valores · mínimo ${fmt(h.minimum)} · máximo ${fmt(h.maximum)} ${unit(h.unit)}`]
     };
   },
   event(finding) {
     const h = finding.how_much;
     const sense = h.direction === 'above' ? 'por encima' : 'por debajo';
-    const lines = h.events.slice(0, 8).map(e => `${e.start}${e.end !== e.start ? ' a ' + e.end : ''}: ${e.duration_steps} paso(s), pico ${fmt(e.peak_value)} ${h.unit} (${e.peak_date})`);
+    const lines = h.events.slice(0, 8).map(e => `${e.start}${e.end !== e.start ? ' a ' + e.end : ''}: ${e.duration_steps} paso(s), pico ${fmt(e.peak_value)} ${unit(h.unit)} (${e.peak_date})`);
     if (h.events.length > 8) lines.push(`… y ${h.n_events - 8} más.`);
     return {
       headline: h.n_events ? `${h.n_events} evento(s) ${sense} del percentil ${fmt(h.q * 100, 3)} de la base` : `Ningún evento ${sense} del percentil ${fmt(h.q * 100, 3)} de la base`,
-      lines: [`Umbral entre ${fmt(h.threshold_min)} y ${fmt(h.threshold_max)} ${h.unit} · duración mínima ${h.min_duration_steps} paso(s)`, ...lines]
+      lines: [`Umbral entre ${fmt(h.threshold_min)} y ${fmt(h.threshold_max)} ${unit(h.unit)} · duración mínima ${h.min_duration_steps} paso(s)`, ...lines]
     };
   },
   association(finding) {
@@ -172,8 +186,8 @@ const FINDINGS = {
   },
   climate_index(finding) {
     const h = finding.how_much;
-    const lines = [`${h.n_years} años completos · media ${fmt(h.mean)} ${h.unit} · mínimo ${fmt(h.minimum)} · máximo ${fmt(h.maximum)} (${h.maximum_year})`,
-      `Último año (${h.last_year}): ${fmt(h.last)} ${h.unit}`];
+    const lines = [`${h.n_years} años completos · media ${fmt(h.mean)} ${unit(h.unit)} · mínimo ${fmt(h.minimum)} · máximo ${fmt(h.maximum)} (${h.maximum_year})`,
+      `Último año (${h.last_year}): ${fmt(h.last)} ${unit(h.unit)}`];
     if (h.threshold !== undefined) lines.push(`Umbral: percentil ${fmt(h.percentile)} de los días húmedos de la base = ${fmt(h.threshold)} mm (${h.n_reference_wet_days} días de referencia)`);
     lines.push('Por año: ' + h.years.map((year, i) => `${year}: ${fmt(h.values[i], 3)}`).slice(-12).join(' · '));
     return { headline: `${h.index}: ${h.title.charAt(0).toLowerCase()}${h.title.slice(1)}`, lines };
@@ -183,7 +197,7 @@ const FINDINGS = {
     return {
       headline: `Patrón en una muestra de ${h.n_points} puntos`,
       lines: [`${h.n_significant_fdr} de ${h.n_analyzed} puntos con tendencia significativa tras controlar falsos descubrimientos (${h.n_significant_raw} sin control)`,
-        `Pendiente media: ${fmt(h.mean_per_decade)} ${h.unit} · ${h.n_positive} positivas, ${h.n_negative} negativas`]
+        `Pendiente media: ${fmt(h.mean_per_decade)} ${unit(h.unit)} · ${h.n_positive} positivas, ${h.n_negative} negativas`]
     };
   }
 };
