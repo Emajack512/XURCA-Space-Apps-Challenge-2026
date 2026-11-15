@@ -24,19 +24,30 @@ from .intervals import residual_intervals, split_coverage
 VERSION = '1.0.0-candidate'
 
 
-def _skill_horizon(skill: np.ndarray) -> int:
-    """Largest h such that skill > 0 for steps 1..h."""
+def _skill_horizon(skill: np.ndarray, threshold: float = 0.0) -> int:
+    """Largest h such that skill > threshold for steps 1..h."""
     count = 0
     for value in skill:
-        if np.isfinite(value) and value > 0:
+        if np.isfinite(value) and value > threshold:
             count += 1
         else:
             break
     return count
 
 
+def _coverage_floor(level: float, n_test) -> float | None:
+    """Lowest acceptable empirical coverage: nominal minus two binomial standard errors (one-sided).
+
+    Under-coverage is the dangerous direction; with few test origins the floor is wide because the
+    measured coverage itself is uncertain (D-21, provisional).
+    """
+    if not n_test or n_test < 2:
+        return None
+    return float(level - 2 * np.sqrt(level * (1 - level) / n_test))
+
+
 def forecast_with_backtest(times, values, groups, *, horizon, period, initial_train=0, max_origins=24,
-                           level=0.90, min_residuals=10, min_count=3) -> dict:
+                           level=0.90, min_residuals=10, min_count=3, min_skill=0.05) -> dict:
     t, y = temporal(times, values, regular=True, minimum=8)
     labels = np.asarray(groups)
     if labels.shape != y.shape or labels.dtype.kind not in 'iu':
@@ -48,6 +59,9 @@ def forecast_with_backtest(times, values, groups, *, horizon, period, initial_tr
     needed = integer(min_residuals, 'min_residuals')
     first = integer(initial_train, 'initial_train', 0) or max(3 * p, n // 2)
     nominal = scalar(level, 'level')
+    skill_floor = scalar(min_skill, 'min_skill')
+    if not 0 <= skill_floor < 1:
+        raise ValueError('min_skill must be in [0, 1)')
     spare = n - h - first
     if spare < 0:
         raise ValueError('Series too short for the requested horizon and training window')
@@ -98,10 +112,20 @@ def forecast_with_backtest(times, values, groups, *, horizon, period, initial_tr
         lower[validated_steps:], upper[validated_steps:] = np.nan, np.nan
         warnings.append(f'Skill over the baseline holds only for the first {validated_steps} step(s); '
                         'later steps have no nominal interval.')
-    calibrated = bool(np.isfinite(lower).any() and coverage['coverage'] is not None)
-    if not calibrated:
+    floor = _coverage_floor(nominal, coverage['n_test'])
+    measured = coverage['coverage'] is not None and floor is not None
+    coverage_ok = measured and coverage['coverage'] >= floor
+    calibrated = bool(np.isfinite(lower).any() and coverage_ok)
+    if not measured:
         warnings.append('Interval coverage could not be measured on held-out origins: treat any interval as uncalibrated.')
-    mode = ('validated_forecast' if delivered == 'model' and validated_steps >= h and calibrated
+    elif not coverage_ok:
+        warnings.append(f'Interval under-covers on held-out origins ({coverage["coverage"]:.2f} < {floor:.2f} for a '
+                        f'nominal {nominal:.2f}): treat it as uncalibrated.')
+    skilled_steps = _skill_horizon(skill, skill_floor) if delivered == 'model' else 0
+    if delivered == 'model' and skilled_steps < h:
+        warnings.append(f'Skill over the baseline exceeds {skill_floor:.0%} only for the first {skilled_steps} step(s): '
+                        'not enough to call the forecast validated.')
+    mode = ('validated_forecast' if delivered == 'model' and skilled_steps >= h and calibrated
             else 'exploratory_extrapolation')
 
     summary = {name: {'mae': item['model']['mae'], 'rmse': item['model']['rmse'], 'bias': item['model']['bias'],
@@ -112,9 +136,11 @@ def forecast_with_backtest(times, values, groups, *, horizon, period, initial_tr
         'times': future, 'central': central, 'lower': lower, 'upper': upper,
         'mode': mode, 'delivered': delivered, 'model': label, 'best_candidate': best_model,
         'best_baseline': best_baseline, 'baseline_values': np.asarray(baselines[best_baseline](t, y, h), dtype=np.float64),
-        'not_superior_to_baseline': not superior, 'horizon_requested': h, 'horizon_validated': int(validated_steps),
+        'not_superior_to_baseline': not superior, 'horizon_requested': h, 'horizon_validated': int(skilled_steps),
+        'horizon_positive_skill': int(validated_steps), 'min_skill': skill_floor,
         'skill_vs_best_baseline': skill,
         'interval': {'level': nominal, 'calibrated': calibrated, 'empirical_coverage': coverage['coverage'],
+                     'coverage_floor': floor,
                      'n_calibration_origins': coverage['n_calibration'], 'n_test_origins': coverage['n_test'],
                      'n_residuals': bounds['n_residuals']},
         'backtest': {'design': reference['design'], 'n_origins': reference['n_origins'], 'initial_train': first,

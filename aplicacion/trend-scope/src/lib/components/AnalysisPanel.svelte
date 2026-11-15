@@ -5,7 +5,7 @@
   import { listAnalyses } from '$lib/services/acquisition.js';
   import { executeAnalysis } from '$lib/services/analysisRunner.js';
   import { analysisRun } from '$lib/stores/analysis.js';
-  import { describeFinding, parameterValue, statusText, verdictText } from '$lib/services/analysisText.js';
+  import { describeFinding, fmt, parameterValue, statusText, unit, verdictText } from '$lib/services/analysisText.js';
   import { catalog } from '$lib/services/sources.js';
   import { translate } from '$lib/services/i18n.js';
   import { workspace } from '$lib/stores/workspace.js';
@@ -265,8 +265,17 @@
                   {/each}
                 </tbody>
               </table>
-              <p class="quiet">Unidad: {block.forecast.unit}. {block.forecast.interval ? `Intervalo predictivo de nivel ${block.forecast.interval.level}` : 'Sin intervalo: el pronóstico no está calibrado.'}
-                {block.forecast.mode === 'validated_forecast' ? ' Validado con backtest de origen móvil.' : ' Exploratorio: no superó la validación.'}</p>
+              <p class="quiet">Unidad: {unit(block.forecast.unit)}.
+                {#if !block.forecast.interval}
+                  Sin estimación de incertidumbre: no hay intervalo calibrado.
+                {:else if block.forecast.interval.calibrated}
+                  Intervalo predictivo de nivel {fmt(block.forecast.interval.level * 100, 3)} %; cobertura medida fuera de muestra: {fmt(block.forecast.interval.empirical_coverage * 100, 3)} %.
+                {:else}
+                  Intervalo NO calibrado (nivel nominal {fmt(block.forecast.interval.level * 100, 3)} %{block.forecast.interval.empirical_coverage != null ? `, cubrió ${fmt(block.forecast.interval.empirical_coverage * 100, 3)} % fuera de muestra` : ''}{block.forecast.interval.coverage_floor != null ? `, mínimo aceptable ${fmt(block.forecast.interval.coverage_floor * 100, 3)} %` : ''}): no lo uses como incertidumbre.
+                {/if}
+                {block.forecast.mode === 'validated_forecast'
+                  ? ' Validado con backtest de origen móvil.'
+                  : ` Exploratorio: no superó la validación (mejora mínima exigida sobre la referencia: ${fmt((block.forecast.min_skill ?? 0) * 100, 3)} % en cada paso).`}</p>
             {/if}
             {#if block.warnings.length}
               <details><summary>{$translate('Avisos')} ({block.warnings.length})</summary>{#each block.warnings.slice(0, 12) as warning}<p class="quiet">{warning.message}</p>{/each}</details>

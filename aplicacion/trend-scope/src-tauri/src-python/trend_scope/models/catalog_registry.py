@@ -110,11 +110,13 @@ def catalog_registry(*, include_optional: bool = True):
         category='stats', output_kind='forecast', dimensions=(('time',),), min_observations=48,
         minimum_reason='Needs enough history for a training window plus out-of-sample origins; the handler checks the series length',
         regularity='regular monthly grid; no missing values; groups = calendar month (1-12)',
-        parameters=('groups', 'horizon', 'period', 'initial_train', 'max_origins', 'level', 'min_residuals', 'min_count'),
+        parameters=('groups', 'horizon', 'period', 'initial_train', 'max_origins', 'level', 'min_residuals', 'min_count',
+                    'min_skill'),
         dependencies=('numpy', 'statsmodels (optional candidates)'),
         complexity='one model fit per origin and candidate; origins capped by max_origins',
         acceleration='statsmodels/NumPy; no performance claim',
-        parameter_defaults={'initial_train': 0, 'max_origins': 24, 'level': 0.90, 'min_residuals': 10, 'min_count': 3}),
+        parameter_defaults={'initial_train': 0, 'max_origins': 24, 'level': 0.90, 'min_residuals': 10, 'min_count': 3,
+                            'min_skill': 0.05}),
         analyze_forecast)
     from .stats.lagged import analyze_lagged_correlation, analyze_partial_correlation
     registry.register(MethodSpec(

@@ -399,20 +399,25 @@ STRUCTS: tuple = (
             initial_train=ParamSpec("int", 0, 0, 100000, provisional=True,
                                     description="Meses de entrenamiento inicial (0 = automático)"),
             baseline_min_count=ParamSpec("int", 3, 2, 50, provisional=True,
-                                         description="Años mínimos por mes para la referencia climatológica")),
+                                         description="Años mínimos por mes para la referencia climatológica"),
+            min_skill=ParamSpec("float", 0.05, 0.0, 0.5, provisional=True,
+                                description="Mejora mínima del error absoluto medio sobre la mejor referencia, en cada paso, "
+                                            "para declarar el pronóstico validado (0,05 = 5 %). La cobertura del intervalo "
+                                            "además debe ser ≥ nivel − 2 errores estándar binomiales." + _PROPOSED)),
         hypotheses=("forecast_threshold",),
         steps=(Step("forecast", (Candidate(
             "forecast_backtest", "always",
             {"groups": "groups", "horizon": "$horizon", "period": 12, "initial_train": "$initial_train",
              "max_origins": "$max_origins", "level": "$level", "min_residuals": "$min_residuals",
-             "min_count": "$baseline_min_count"},
+             "min_count": "$baseline_min_count", "min_skill": "$min_skill"},
             "Candidatos contra referencias (climatología y persistencia), con backtest de origen móvil"),),
             "Pronóstico con backtest"),),
         charts=("forecast_fan",),
         description="Pronóstico estadístico de la serie. Se entrega la referencia si ningún modelo la supera.",
         limitations=("Es un pronóstico estadístico de una sola serie, sin predictores físicos ni escenarios.",
                      "El desempeño pasado no garantiza el futuro; los cambios de régimen no se modelan.",
-                     "Solo se declara 'validado' con habilidad positiva fuera de muestra e intervalo con cobertura medida.")),
+                     "Solo se declara 'validado' si supera a la referencia por al menos min_skill en cada paso fuera de "
+                     "muestra y el intervalo no cubre de menos más allá de la tolerancia binomial.")),
 )
 
 BY_ID: Mapping = {item.struct_id: item for item in STRUCTS}
