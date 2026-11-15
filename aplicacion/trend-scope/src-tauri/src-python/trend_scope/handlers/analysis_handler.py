@@ -174,7 +174,7 @@ def apply_dependent_defaults(struct: AnalysisStruct, params: dict, profile: dict
             continue
         params[name] = _check_param(name, definition, definition.by_value[key])
         label = f"cadencia {key}" if definition.depends_on == "@cadence" else f"{definition.depends_on}={key}"
-        notes.append(f"{name} = {params[name]} (valor propuesto para {label}, sin validar por la investigación: D-03).")
+        notes.append(f"{name} = {params[name]} (valor por defecto para {label}).")
     return notes
 
 
@@ -187,7 +187,7 @@ def check(struct: AnalysisStruct, params: dict, profile: dict, scope: Optional[d
     minimum = params.get("min_points") or req.min_points
     if n < minimum:
         issues.append(error_item(INSUFFICIENT_DATA, f"Hay {n} observaciones válidas y {struct.struct_id} requiere al "
-                                 f"menos {minimum} (valor provisional).", scope))
+                                 f"menos {minimum}.", scope))
     cadence = profile.get("cadence")
     if req.cadences and cadence not in req.cadences:
         issues.append(error_item(CADENCE_INCOMPATIBLE, f"La serie tiene cadencia '{cadence}' y {struct.struct_id} "
@@ -204,7 +204,7 @@ def check(struct: AnalysisStruct, params: dict, profile: dict, scope: Optional[d
         if horizon > cap:
             issues.append(error_item(INSUFFICIENT_DATA, f"El horizonte pedido ({horizon}) supera el máximo permitido "
                                      f"para esta serie ({cap}: el menor entre el tope de la cadencia y el 20 % de las "
-                                     "observaciones; valores provisionales).", scope))
+                                     "observaciones).", scope))
     return issues
 
 

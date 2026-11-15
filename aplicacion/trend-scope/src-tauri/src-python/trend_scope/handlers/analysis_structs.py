@@ -40,7 +40,7 @@ class ParamSpec:
 class Requirements:
     cadences: tuple = ()          # allowed cadences after preparation; () = any
     regular: bool = False         # needs an unbroken regular grid
-    min_points: int = 2           # provisional unless stated (decision D-03)
+    min_points: int = 2           # approved with the other defaults (decision D-03)
     max_points: Optional[int] = None   # pair budget of Sen / Mann-Kendall
     variable_families: tuple = () # () = any
     time: str = "years"           # years | months
@@ -102,9 +102,8 @@ def _common(**overrides) -> dict:
 _BASELINE = ParamSpec("period", None, description="Período de referencia {start, end}; por defecto 1991-2020 si la serie lo cubre")
 _ALPHA = ParamSpec("float", 0.05, 0.0001, 0.5, description="Nivel de significancia")
 _CONFIDENCE = ParamSpec("float", 0.95, 0.5, 0.999, description="Nivel del intervalo de confianza")
-# Values proposed on 2026-11-15 from standard practice because the research did not fix them
-# (decision D-03). They are provisional: the chemical engineer has not validated them.
-_PROPOSED = " Valor propuesto (práctica estándar), sin validar por la investigación (D-03)."
+# Default values proposed on 2026-11-15 from standard practice and approved as-is by the
+# project's chemical engineer (decisions D-03 and D-21, 2026-11-15).
 
 STRUCTS: tuple = (
     AnalysisStruct(
@@ -122,10 +121,10 @@ STRUCTS: tuple = (
         requirements=Requirements(cadences=("monthly", "annual", "irregular"), min_points=10, max_points=2000,
                                   time="years", baseline_param="baseline"),
         params=_common(baseline=_BASELINE, alpha=_ALPHA, confidence=_CONFIDENCE,
-                       min_points=ParamSpec("int", 10, 3, 2000, provisional=True,
-                                            description="Observaciones mínimas para inferir (provisional, decisión D-03)"),
-                       mk_lag=ParamSpec("int", 1, 1, 24, provisional=True,
-                                        description="Lag máximo de la corrección por autocorrelación (provisional)")),
+                       min_points=ParamSpec("int", 10, 3, 2000,
+                                            description="Observaciones mínimas para inferir"),
+                       mk_lag=ParamSpec("int", 1, 1, 24,
+                                        description="Lag máximo de la corrección por autocorrelación")),
         hypotheses=("trend",),
         steps=(
             Step("deseason", (Candidate("anomalies", "monthly_cycle",
@@ -214,7 +213,7 @@ STRUCTS: tuple = (
         params=_common(
             gap_policy=ParamSpec("str", "longest_run", choices=("drop", "longest_run"),
                                  description="La estacionalidad exige meses consecutivos"),
-            harmonics=ParamSpec("int", 2, 1, 6, provisional=True, description="Armónicos del ciclo anual (provisional)"),
+            harmonics=ParamSpec("int", 2, 1, 6, description="Armónicos del ciclo anual"),
             trend_degree=ParamSpec("int", 1, 0, 3, description="Grado de la tendencia polinómica que acompaña al ciclo")),
         hypotheses=(),
         steps=(
@@ -244,20 +243,19 @@ STRUCTS: tuple = (
             method=ParamSpec("str", "pelt", choices=("pelt", "cusum"),
                              description="pelt: cambios de nivel en toda la serie; cusum: desde cuándo la serie se aparta "
                                          "de la base de referencia (alarmas acumuladas)"),
-            k=ParamSpec("float", 0.5, 0.0, 5.0, provisional=True,
+            k=ParamSpec("float", 0.5, 0.0, 5.0,
                         description="CUSUM: holgura en desvíos de la base (0,5 detecta corrimientos de 1 desvío; "
-                                    "Montgomery)." + _PROPOSED),
-            h=ParamSpec("float", 5.0, 0.5, 50.0, provisional=True,
+                                    "Montgomery)."),
+            h=ParamSpec("float", 5.0, 0.5, 50.0,
                         description="CUSUM: umbral de alarma en desvíos de la base (5 ≈ 465 pasos promedio sin falsa "
-                                    "alarma con datos independientes; Montgomery)." + _PROPOSED),
-            penalty=ParamSpec("float", None, 1e-12, 1e12, provisional=True,
+                                    "alarma con datos independientes; Montgomery)."),
+            penalty=ParamSpec("float", None, 1e-12, 1e12,
                               description="Penalización de PELT, en unidades al cuadrado de la serie. Vacío: criterio SIC "
-                                          "(2·σ²·ln n, σ robusto de las diferencias; Killick et al. 2012)." + _PROPOSED),
-            min_size=ParamSpec("int", None, 2, 1000, provisional=True, depends_on="@cadence",
+                                          "(2·σ²·ln n, σ robusto de las diferencias; Killick et al. 2012)."),
+            min_size=ParamSpec("int", None, 2, 1000, depends_on="@cadence",
                                by_value={"monthly": 12, "annual": 5},
                                description="Tamaño mínimo de cada segmento, en pasos. Vacío: 12 meses o 5 años "
-                                           "(un régimen más corto suele ser variabilidad, no un cambio de nivel)."
-                                           + _PROPOSED)),
+                                           "(un régimen más corto suele ser variabilidad, no un cambio de nivel).")),
         hypotheses=("change_point",),
         steps=(
             Step("deseason", (Candidate("anomalies", "monthly_cycle",
@@ -286,12 +284,11 @@ STRUCTS: tuple = (
             gap_policy=ParamSpec("str", "longest_run", choices=("drop", "longest_run"),
                                  description="El suavizado exige pasos consecutivos"),
             method=ParamSpec("str", "moving_average", choices=("moving_average", "ssa"), description="Método de suavizado"),
-            window=ParamSpec("int", None, 2, 5000, provisional=True, depends_on="@cadence",
+            window=ParamSpec("int", None, 2, 5000, depends_on="@cadence",
                              by_value={"daily": 31, "monthly": 12, "annual": 5},
-                             description="Ventana en pasos de la serie. Vacío: 31 días, 12 meses o 5 años según la cadencia."
-                                         + _PROPOSED),
-            components=ParamSpec("int_list", [0], 0, 100, provisional=True,
-                                 description="Componentes SVD que reconstruye SSA, base 0 (provisional)")),
+                             description="Ventana en pasos de la serie. Vacío: 31 días, 12 meses o 5 años según la cadencia."),
+            components=ParamSpec("int_list", [0], 0, 100,
+                                 description="Componentes SVD que reconstruye SSA, base 0")),
         hypotheses=(),
         steps=(Step("smooth", (
             Candidate("moving_average", "param:method=moving_average", {"window": "$window"},
@@ -312,16 +309,16 @@ STRUCTS: tuple = (
             gap_policy=ParamSpec("str", "longest_run", choices=("drop", "longest_run"),
                                  description="Los eventos exigen períodos consecutivos"),
             baseline=_BASELINE,
-            q=ParamSpec("float", None, 0.0001, 0.9999, provisional=True, depends_on="direction",
+            q=ParamSpec("float", None, 0.0001, 0.9999, depends_on="direction",
                         by_value={"above": 0.9, "below": 0.1},
                         description="Percentil del umbral, entre 0 y 1. Vacío: 0,9 por encima o 0,1 por debajo "
-                                    "(percentiles 90/10 de los índices ETCCDI)." + _PROPOSED),
+                                    "(percentiles 90/10 de los índices ETCCDI)."),
             direction=ParamSpec("str", "above", choices=("above", "below"),
                                 description="above: valores por encima del umbral; below: por debajo"),
-            min_duration=ParamSpec("int", None, 1, 1000, provisional=True, depends_on="@cadence",
+            min_duration=ParamSpec("int", None, 1, 1000, depends_on="@cadence",
                                    by_value={"monthly": 1, "annual": 1},
                                    description="Duración mínima del evento, en pasos. Vacío: 1 (un mes o un año extremo ya "
-                                               "es un evento; los consecutivos se unen)." + _PROPOSED)),
+                                               "es un evento; los consecutivos se unen).")),
         hypotheses=("threshold",),
         steps=(Step("events", (Candidate(
             "detect_events", "always",
@@ -341,11 +338,11 @@ STRUCTS: tuple = (
             gap_policy=ParamSpec("str", "longest_run", choices=("drop", "longest_run"),
                                  description="La correlación con desfases exige períodos consecutivos"),
             baseline=_BASELINE, alpha=_ALPHA,
-            lags=ParamSpec("int_list", None, -60, 60, provisional=True, depends_on="@cadence",
+            lags=ParamSpec("int_list", None, -60, 60, depends_on="@cadence",
                            by_value={"monthly": [0, 1, 2, 3, 6], "annual": [0, 1]},
                            description="Desfases a evaluar, en pasos (positivo: la primera variable antecede a la segunda). "
                                        "Vacío: 0, 1, 2, 3 y 6 meses, o 0 y 1 año (escalas típicas de respuesta "
-                                       "hidroclimática y de teleconexiones)." + _PROPOSED),
+                                       "hidroclimática y de teleconexiones)."),
             deseasonalize=ParamSpec("bool", True, description="Quitar el ciclo mensual de cada serie antes de correlacionar")),
         hypotheses=("relationship",),
         steps=(
@@ -403,19 +400,19 @@ STRUCTS: tuple = (
         params=_common(
             gap_policy=ParamSpec("str", "longest_run", choices=("drop", "longest_run"),
                                  description="El pronóstico exige meses consecutivos"),
-            horizon=ParamSpec("int", 6, 1, 24, provisional=True, description="Pasos (meses) a pronosticar"),
+            horizon=ParamSpec("int", 6, 1, 24, description="Pasos (meses) a pronosticar"),
             level=ParamSpec("float", 0.90, 0.5, 0.99, description="Nivel nominal del intervalo predictivo"),
-            max_origins=ParamSpec("int", 24, 4, 200, provisional=True, description="Orígenes máximos del backtest"),
-            min_residuals=ParamSpec("int", 10, 3, 200, provisional=True,
+            max_origins=ParamSpec("int", 24, 4, 200, description="Orígenes máximos del backtest"),
+            min_residuals=ParamSpec("int", 10, 3, 200,
                                     description="Residuos mínimos por paso para calibrar el intervalo"),
-            initial_train=ParamSpec("int", 0, 0, 100000, provisional=True,
+            initial_train=ParamSpec("int", 0, 0, 100000,
                                     description="Meses de entrenamiento inicial (0 = automático)"),
-            baseline_min_count=ParamSpec("int", 3, 2, 50, provisional=True,
+            baseline_min_count=ParamSpec("int", 3, 2, 50,
                                          description="Años mínimos por mes para la referencia climatológica"),
-            min_skill=ParamSpec("float", 0.05, 0.0, 0.5, provisional=True,
+            min_skill=ParamSpec("float", 0.05, 0.0, 0.5,
                                 description="Mejora mínima del error absoluto medio sobre la mejor referencia, en cada paso, "
                                             "para declarar el pronóstico validado (0,05 = 5 %). La cobertura del intervalo "
-                                            "además debe ser ≥ nivel − 2 errores estándar binomiales." + _PROPOSED)),
+                                            "además debe ser ≥ nivel − 2 errores estándar binomiales.")),
         hypotheses=("forecast_threshold",),
         steps=(Step("forecast", (Candidate(
             "forecast_backtest", "always",
@@ -443,7 +440,7 @@ SPATIAL = _dc.replace(
     _trend, struct_id="spatial_pattern", title="Patrón espacial de tendencias (muestra de puntos)",
     params={**_trend.params,
             "area_feature_id": ParamSpec("str", None, description="Id del polígono en geography.selection; por defecto el único"),
-            "n_points": ParamSpec("int", 9, 4, 25, provisional=True, description="Puntos de la muestra dentro del polígono")},
+            "n_points": ParamSpec("int", 9, 4, 25, description="Puntos de la muestra dentro del polígono")},
     hypotheses=(), charts=("map_points",), phase=3,
     description="Tendencia en una retícula de puntos dentro de un polígono, con control de falsos descubrimientos.",
     limitations=("Es una muestra de puntos, no un promedio zonal ni un ráster.",
@@ -461,8 +458,8 @@ GRID = (
         struct_id="grid_trend_map", title="Mapa de tendencias por celda", kind="statistical", targets=(1, 1),
         requirements=Requirements(cadences=("monthly",)),
         params={"area_feature_id": _AREA, "alpha": _ALPHA,
-                "min_points": ParamSpec("int", 60, 10, 2000, provisional=True,
-                                        description="Meses válidos mínimos por celda para probar la tendencia." + _PROPOSED)},
+                "min_points": ParamSpec("int", 60, 10, 2000,
+                                        description="Meses válidos mínimos por celda para probar la tendencia.")},
         hypotheses=(), steps=(), charts=("map",), phase=4,
         description="Tendencia (Sen + Mann-Kendall, sin ciclo anual) en cada celda de la grilla dentro del polígono, "
                     "con control de falsos descubrimientos.",
@@ -473,7 +470,7 @@ GRID = (
         requirements=Requirements(cadences=("monthly",)),
         params={"area_feature_id": _AREA, "baseline": _BASELINE,
                 "period": ParamSpec("period", None, description="Período a comparar {start, end}; por defecto los últimos 12 meses"),
-                "baseline_min_count": ParamSpec("int", 3, 2, 50, provisional=True,
+                "baseline_min_count": ParamSpec("int", 3, 2, 50,
                                                 description="Años mínimos de la base por mes y celda")},
         hypotheses=(), steps=(), charts=("map",), phase=4,
         description="Diferencia del período elegido respecto del promedio mensual de la base, en cada celda.",
@@ -482,8 +479,8 @@ GRID = (
         struct_id="grid_smoothing", title="Mapa suavizado (convolución 2D)", kind="mathematical", targets=(1, 1),
         requirements=Requirements(),
         params={"area_feature_id": _AREA,
-                "size": ParamSpec("int", 3, 3, 9, provisional=True,
-                                  description="Lado de la ventana en celdas (impar)." + _PROPOSED)},
+                "size": ParamSpec("int", 3, 3, 9,
+                                  description="Lado de la ventana en celdas (impar).")},
         hypotheses=(), steps=(), charts=("map",), phase=4,
         description="Media de caja 2D (FIR) sobre el último paso de la grilla, para ver el patrón general.",
         limitations=("Suavizar no agrega información ni resolución.", "Si falta alguna celda, ese paso no se suaviza.",

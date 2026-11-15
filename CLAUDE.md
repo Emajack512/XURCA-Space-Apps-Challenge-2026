@@ -39,7 +39,7 @@ Proyecto: **Earth Detective / XURCA** (NASA Space Apps 2026). App de escritorio 
 
 - **Estado de `main` (`f0fac44`):** backend completo (13 análisis de series + 5 de mapa) e integrado con los conectores del Codex de Ema. En `ema_workspace` hay commits sin subir: `fa83b4a` (tarea 2 del Codex y aviso en el `AGENTS.md` raíz) y esta actualización; se suben junto con la entrega de la tarea 2.
 - **Tarea 2 del Codex de Ema: HECHA e integrada (merge `7faf8b9`).** Solo cambió `productName` → `TrendScope` e `icons/`. Al revisar, Claude encontró que el JPEG traía un **damero de «transparencia» pintado** (píxeles grises/blancos opacos en las esquinas): se rehízo `icons/source/app_icon.png` con máscara circular (radio 481 px sobre 1024, borde suavizado) y se regeneraron los íconos con `tauri icon`; se borraron `icons/android` e `icons/ios` (solo escritorio). Esquinas con alfa 0; `.ico` de 16 a 256. Detalle original de la tarea: `productName` = **`TrendScope`** en `src-tauri/tauri.conf.json` (el instalador y el ejecutable); **no** cambiar `identifier` (`com.xurca.trend-scope`, define dónde se guardan las configuraciones) ni el título de ventana («Earth Detective»); ícono desde `C:\Users\Victus\Downloads\app_icon_01.jpeg` (JPEG RGB 1024 × 1024, cuadrado) copiado a `src-tauri/icons/source/`, convertido a PNG con Pillow y todos los tamaños generados con `tauri icon` usando los `node_modules` del repo principal. Al recibirla: revisar que solo tocó `productName` e `icons/`, que la lista `bundle.icon` apunte a archivos existentes, merge en `ema_workspace` y subir a `main`. El nombre y el ícono pasan a ser del carril del Codex de Ema (anotado en el `AGENTS.md` raíz).
-- **Validación de la ingeniera química:** Ema dice que validó los valores; **falta confirmar si los aprobó tal cual o cambió alguno**. Con la confirmación: quitar `provisional=True` y el sufijo `_PROPOSED` («Valor propuesto (práctica estándar), sin validar…») de los parámetros aprobados en `handlers/analysis_structs.py`, ajustar los `by_value`/`default` que cambien, actualizar `min_skill` y la tolerancia de cobertura si cambian (D-21), y marcar D-03 y D-21 como decididas en `21_RIESGOS_Y_DECISIONES.md`. Si se cambia algún valor, regenerar los fixtures (`docs/plan-maestro/schemas/`).
+- **Validación de la ingeniera química: HECHA (2026-11-15).** Aprobó tal cual todos los valores por defecto (D-03) y los criterios del pronóstico (D-21). Se quitaron `provisional=True` de todos los parámetros, el sufijo «Valor propuesto…, sin validar» de las descripciones, «(valor provisional)» de los mensajes de `analysis_handler.check` y el aviso «propuesto, sin validar» de `apply_dependent_defaults` (ahora dice «valor por defecto para cadencia …»). El mecanismo `ParamSpec.provisional` se conserva para marcar valores nuevos que no estén validados. Los fixtures no cambian (los valores son los mismos).
 - **Antes de repartir el build:**
   1. Nunca se corrió `pnpm check`, `pnpm build` ni `tauri build`: solo `tauri dev`. Empaquetar Python con numpy, scipy, rasterio, statsmodels y ruptures es el paso de más riesgo; probar el instalador en una PC limpia (sin el venv).
   2. **Open-Meteo:** la cuota gratuita (600/min, 5 000/hora) es **por IP**; testers en la misma red la comparten y la agotan. Al cierre de esta sesión seguía en HTTP 429: `grid_fire_weather` y `precipitation_indices` no están verificados con datos reales (correr `python -m trend_scope.raster.manual_check` cuando se libere). Para el test, preferir NASA POWER.
@@ -83,7 +83,7 @@ Structs (13): `describe`, `trend_significance`, `anomaly`, `drought_spi`, `regre
 
 `spatial_pattern` agrupa los puntos con series idénticas (caen en la misma celda de la fuente; con POWER, 9 puntos en ~1° × 0,7° dan 4 series): tendencia y FDR una vez por serie distinta, `how_much.n_distinct_series` y `shared_by_points` en cada tendencia, más una limitación explícita. Antes contaba 9 series «significativas» y exageraba la evidencia.
 
-**Ya no hay parámetros obligatorios** (etapa B, 2026-11-15). Valores **propuestos por Claude** a pedido del equipo (la ingeniera no los fijó; su documento `Trend_Detective_FRONTEND_MAPAS_v1` es de diseño de mapas): todos `provisional=True`, cada uno reportado como aviso «propuesto, sin validar (D-03)» y en `parameters_effective`:
+**Ya no hay parámetros obligatorios** (etapa B, 2026-11-15). Valores propuestos por Claude desde la práctica estándar y **aprobados tal cual por la ingeniera química (2026-11-15)**; cada valor completado automáticamente se informa como aviso («valor por defecto para cadencia …») y en `parameters_effective`:
 
 | Parámetro | Valor | Fuente |
 |---|---|---|
@@ -118,14 +118,14 @@ Mecanismo: `ParamSpec.depends_on` (`"@cadence"` o el nombre de otro parámetro) 
 - Los handlers **no contienen fórmulas**: todo cálculo sale de un método del motor.
 - Nada de interpolación, orden ni conversión de unidades implícitos; toda transformación va en `transformations`.
 - Nunca un «porcentaje de certeza»; p ≥ α o intervalo con 0 → «no hay evidencia suficiente», jamás «sin cambios».
-- Valores provisionales (sin respaldo de la investigación): `min_points` 10, topes de horizonte (mensual 12, diario 14, anual 5), `max_origins` 24, `min_residuals` 10, `baseline_min_count` 3, `mk_lag` 1, `n_points` 9.
+- Valores por defecto aprobados por la ingeniera química (2026-11-15): `min_points` 10, topes de horizonte (mensual 12, diario 14, anual 5), `max_origins` 24, `min_residuals` 10, `baseline_min_count` 3, `mk_lag` 1, `n_points` 9, más la tabla de la etapa B y `min_skill` 0,05. Un valor nuevo sin validar se marca con `provisional=True`.
 - Git: no hacer commit ni push sin pedido explícito. No incluir en commits `package.json` (agrega `pnpm` como dependencia), `package-lock.json` ni `src-tauri/Cargo.toml`: están modificados en la copia de Ema y no son parte del trabajo.
 
 ## Decisiones (`docs/plan-maestro/21_RIESGOS_Y_DECISIONES.md`)
 
 - **D-06 decidida:** `statsmodels`, `pymannkendall`, `ruptures` en `pyproject.toml` (compilan en Windows y en el Linux de Eze).
-- **D-03 resuelta provisionalmente:** valores propuestos desde la literatura (tabla arriba), marcados como no validados. Queda pendiente la validación de la ingeniera química; su documento de mapas no los cubre (menciona un «delta incremental v3 de backend» que no tenemos).
-- **D-21 resuelta provisionalmente:** `min_skill` 0,05 por paso y tolerancia binomial de cobertura (ver etapa C), fijadas tras backtests reales; pendiente de validación por la investigación.
+- **D-03 decidida (2026-11-15):** valores propuestos desde la literatura (tabla arriba), aprobados tal cual por la ingeniera química; sin marcas de provisional en la app.
+- **D-21 decidida (2026-11-15):** `min_skill` 0,05 por paso y tolerancia binomial de cobertura (ver etapa C), fijadas tras backtests reales y aprobadas tal cual por la ingeniera química.
 
 ## Pendientes y riesgos conocidos
 
