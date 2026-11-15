@@ -48,6 +48,8 @@
   let exporting = $state(false);
   let dirty = $derived(JSON.stringify($workspace) !== savedConfig);
   let configKey = $derived(JSON.stringify($workspace.data));
+  let savedAccent = $derived($workspace.visual.appearance.accent);
+  let customAccent = $derived(savedAccent?.toLowerCase() === '#57dfc1' ? null : savedAccent);
   let resultStatus = $derived(running ? 'Procesando…' : result?.key === configKey ? 'Consulta completada' : result ? 'Configuración modificada' : 'Sin resultados');
   let selected = $derived($workspace.data.geography.selection.features.at(-1));
   const tools = [
@@ -272,7 +274,7 @@
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); save(); }
 }}/>
 
-<div class="app-shell" class:light={$workspace.visual.theme === 'light'} style:--accent={$workspace.visual.appearance.accent} style:--base-size={$workspace.visual.appearance.fontSize + 'px'}>
+<div class="app-shell" class:light={$workspace.visual.theme === 'light'} style:--custom-accent={customAccent} style:--base-size={$workspace.visual.appearance.fontSize + 'px'}>
   <header class="topbar">
     <div class="identity"><span class="brand-mark"><Aperture size={24} strokeWidth={1.7}/></span><strong>Earth Detective</strong></div>
     <nav aria-label={$translate("Menú principal")}>
@@ -396,7 +398,7 @@
         <label>{$translate('Idioma')}<select value={$workspace.visual.language} onchange={event => editVisual(visual => visual.language = event.currentTarget.value)}><option value="es">Español</option><option value="en">English</option></select></label>
         <label>{$translate("Tema")}<select value={$workspace.visual.theme} onchange={event => editVisual(visual => visual.theme = event.currentTarget.value)}><option value="dark">{$translate("Oscuro")}</option><option value="light">{$translate("Claro")}</option></select></label>
         <label>{$translate("Tamaño del texto")}<select value={$workspace.visual.appearance.fontSize} onchange={event => editVisual(visual => visual.appearance.fontSize = Number(event.currentTarget.value))}><option value="12">{$translate("Compacto")}</option><option value="13">{$translate("Normal")}</option><option value="15">{$translate("Grande")}</option></select></label>
-        <label>{$translate("Color de acento")}<input type="color" value={$workspace.visual.appearance.accent} oninput={event => editVisual(visual => visual.appearance.accent = event.currentTarget.value)}/></label>
+        <label>{$translate("Color de acento")}<input type="color" value={customAccent ?? ($workspace.visual.theme === 'light' ? '#2563eb' : '#38bdf8')} oninput={event => editVisual(visual => visual.appearance.accent = event.currentTarget.value)}/></label>
       </div>
     {/if}
   </dialog>
