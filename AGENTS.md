@@ -31,7 +31,8 @@ Trabajan en paralelo **tres agentes**: el **Codex de JP** (frontend y asistente)
 - `src/lib/components/AnalysisPanel.svelte`, `ForecastChart.svelte`, `src/lib/services/analysisText.js`.
 - `docs/plan-maestro/schemas/` (JSON Schema y fixtures de request/response).
 
-### Lado de Ema — Codex de Ema (solo `PY/raster/`)
+### Lado de Ema — Codex de Ema (`PY/raster/` + nombre e ícono de la app)
+- Desde 2026-11-15 también es dueño del **nombre y el ícono de la app compilada**: el campo `productName` de `src-tauri/tauri.conf.json` (ahora «TrendScope») y `src-tauri/icons/`. El `identifier` (`com.xurca.trend-scope`) no se cambia.
 - `PY/raster/`: conectores de grillas (NASA POWER regional, ERA5 vía Open-Meteo, CHIRPS COG), fixtures y `NOTES.md`. Excepción: `PY/raster/contract.py` (`GridRequest`/`GridField`) es frontera congelada entre el Codex de Ema y Claude; se cambia solo de común acuerdo.
 - Los mapas que el frontend dibuje a partir de estas grillas (componentes de mapa) siguen siendo de JP; el formato de las grillas en `response.json` lo define Claude en `contracts.py` y se avisa a JP antes de cambiarlo.
 

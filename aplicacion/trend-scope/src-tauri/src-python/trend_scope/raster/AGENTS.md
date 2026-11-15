@@ -58,6 +58,25 @@ Construir la capa que trae **campos espaciales en grilla** (mapas de valores) pa
 - Hacé commits chicos en `ema_codex_raster` con mensajes en español. **Nunca** hagas push a `main` ni merge: Ema integra tu rama.
 - No commitees `package.json`, `package-lock.json` ni `src-tauri/Cargo.toml`.
 
-## Cuándo está terminado
+## TAREA 2 (2026-11-15) — nombre e ícono de la app compilada
+
+La tarea 1 (conectores) ya fue integrada en `main`. Esta es una tarea nueva y acotada. **Solo para esta tarea** podés editar, además de `PY/raster/`:
+- `aplicacion/trend-scope/src-tauri/tauri.conf.json` — **únicamente** el campo `productName`.
+- `aplicacion/trend-scope/src-tauri/icons/` — los archivos de ícono.
+
+Pasos:
+1. En `tauri.conf.json` cambiá `"productName": "trend-scope"` por `"productName": "TrendScope"`. **No cambies** `identifier` (`com.xurca.trend-scope`): define dónde se guardan las configuraciones de cada usuario y cambiarlo les borra lo guardado. No cambies `version`, el título de la ventana («Earth Detective»), `Cargo.toml` ni `package.json`.
+2. Copiá el ícono fuente `C:\Users\Victus\Downloads\app_icon_01.jpeg` (JPEG RGB, 1024 × 1024, ya es cuadrado) a `aplicacion/trend-scope/src-tauri/icons/source/app_icon_01.jpeg` para que quede versionado.
+3. Convertilo a PNG 1024 × 1024 con Pillow (está en el venv del repo principal) en `icons/source/app_icon.png`. No lo recortes ni lo deformes.
+4. Generá todos los tamaños con la CLI de Tauri usando los `node_modules` del repo principal (el worktree no los tiene):
+   `C:\Users\Victus\Desktop\nasa-hackathon\XURCA-Space-Apps-Challenge-2026\aplicacion\trend-scope\node_modules\.bin\tauri.cmd icon <ruta del worktree>\aplicacion\trend-scope\src-tauri\icons\source\app_icon.png --output <ruta del worktree>\aplicacion\trend-scope\src-tauri\icons`
+   Verificá con `tauri icon --help` el nombre exacto de la opción de salida antes de correrlo. Debe reemplazar `32x32.png`, `128x128.png`, `128x128@2x.png`, `icon.icns`, `icon.ico`, `icon.png` y los `Square*Logo.png`/`StoreLogo.png`. Si genera carpetas extra (por ejemplo `android/` o `ios/`), borralas: la app es solo de escritorio.
+5. Confirmá que la lista `bundle.icon` de `tauri.conf.json` sigue apuntando a archivos existentes (no la cambies si ya coinciden).
+6. Si tu sandbox no puede ejecutar Python o la CLI, dejá los pasos que faltan escritos en `NOTES.md` → «Pedidos a Claude» en vez de improvisar otra herramienta.
+7. Commit en `ema_codex_raster` con mensaje en español. Sin push ni merge.
+
+Terminado cuando: `productName` es `TrendScope`, `identifier` no cambió, los íconos de `icons/` salen de `app_icon_01.jpeg` y el ícono fuente quedó en `icons/source/`.
+
+## Cuándo está terminado (tarea 1)
 
 `python -m trend_scope.raster.manual_check` corre sin errores para POWER y Open-Meteo (CHIRPS puede informar que no responde), los `GridField` pasan `validate()`, hay fixtures en `PY/raster/fixtures/` y `NOTES.md` documenta límites y pendientes.
