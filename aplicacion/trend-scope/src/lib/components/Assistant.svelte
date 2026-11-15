@@ -4,7 +4,7 @@
   import { isTauri } from '@tauri-apps/api/core';
   import { pyInvoke } from 'tauri-plugin-pytauri-api';
   import { workspace } from '$lib/stores/workspace.js';
-  import { catalog } from '$lib/services/sources.js';
+  import { assistantCatalog as catalog } from '$lib/services/sources.js';
   import { configureWorkspace } from '$lib/services/assistantConfiguration.js';
   import AssistantConnection from './AssistantConnection.svelte';
 

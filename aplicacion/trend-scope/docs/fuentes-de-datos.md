@@ -1,8 +1,34 @@
 # Fuentes de datos de Earth Detective
 
+## Consultas y descargas desde Configuración
+
+Agregá una fuente en **Fuentes de información**, elegí un punto o polígono cuando la fuente lo pida y pulsá **Procesar**. Las series muestran valores en la app. Las descargas muestran la ruta del archivo en el resultado. Los archivos van al subdirectorio `downloads` del directorio de datos de Earth Detective. En Windows está bajo `%LOCALAPPDATA%\com.xurca.trend-scope`.
+
+| Fuente | Selección | Resultado |
+|---|---|---|
+| NOAA NCEI diario | Punto o área del mapa y código de variable, por ejemplo `TMAX`, `TMIN` o `PRCP` | Serie diaria. Los días sin observación quedan vacíos. |
+| NOAA OISST | Punto marino. Códigos `sst`, `anom`, `err` e `icec` | Serie diaria de la celda NOAA. |
+| NOAA ENSO / ONI | Fechas. Anomalía ONI o temperatura móvil de Niño 3.4 | Serie de medias móviles trimestrales con fechas del mes central. |
+| USGS sismos | Polígono y magnitud mínima opcional | Conteo diario, magnitud o profundidad por evento. |
+| INA y PSMSL | Punto o área del mapa. En INA elegí la variable del catálogo; en PSMSL seleccioná nivel relativo del mar. | Observaciones hidrológicas o nivel relativo mensual RLR, respectivamente. |
+| NASA FIRMS | Polígono, sensor oficial y columna, `count` o `all` | CSV con todas las columnas y las detecciones dentro del polígono. `count` grafica el conteo y un código numérico como `frp` grafica su media diaria. |
+| NASA AppEEARS | Producto con versión y capa exacta. **Buscar capas** consulta el catálogo del proveedor. | ZIP de la extracción appEEARS por punto o área. Si sigue en curso, volvé a pulsar **Procesar** para recuperar el mismo trabajo. |
+| NASA Earthdata CMR | ID de colección, como `C2723754864-GES_DISC` para IMERG diario V07, y punto o área | ZIP con gránulos originales y manifiesto. Admite productos con enlaces HTTPS directos compatibles, por ejemplo colecciones de lluvia, humedad, aerosoles o color oceánico. `all` conserva todas las variables del gránulo. El área filtra por extensión rectangular. |
+| Copernicus Data Space | Colección, por ejemplo `SENTINEL-2`, tipo de producto como `S2MSI2A` o `all`, y punto o área | Escenas originales que intersectan la selección. El área se busca por su extensión rectangular. |
+| Copernicus CDS | ERA5, ERA5-Land o niveles de presión con polígono y código oficial. Para otros productos CDS pegá el objeto JSON que muestra el proveedor en **Show API request code**, con fechas, variables y filtros. | ZIP con NetCDF de ERA5 en el rectángulo de la selección, o archivos originales de la solicitud CDS. La ruta JSON sirve para productos con campos propios, como FireCCI o temperatura superficial de lagos. |
+| Planetary Computer STAC | Colección y clave del activo. Por ejemplo `landsat-c2-l2` y `red`. Usá `all` para los activos marcados como datos. | ZIP con bandas o archivos originales y manifiesto de los ítems encontrados. |
+
+Las credenciales se configuran antes de abrir la aplicación. FIRMS usa `FIRMS_MAP_KEY`. AppEEARS usa `APPEEARS_TOKEN` o `EARTHDATA_USERNAME` y `EARTHDATA_PASSWORD`. Las descargas protegidas de CMR usan `EARTHDATA_TOKEN`. Las escenas Sentinel de Copernicus Data Space usan `CDSE_ACCESS_TOKEN`. CDS usa `CDSAPI_KEY` o `.cdsapirc` y requiere aceptar los términos del producto desde el portal.
+
+Los ZIP de grillas y escenas conservan el material para análisis posteriores. La aplicación todavía requiere un paso de procesamiento científico para aplicar máscaras de calidad, derivar índices, estimar área quemada o reducir grillas a series por polígono.
+
 ## Inventario de cobertura
 
-[source-coverage.json](../src-tauri/src-python/trend_scope/services/source-coverage.json) describe los 19 pares de variable y selección predefinidos en la interfaz, agrupados en siete productos o familias dentro de los cuatro conectores activos. Los límites por colección sirven para una evaluación previa. La disponibilidad efectiva depende del punto, la estación o la entidad solicitada.
+[source-coverage.json](../src-tauri/src-python/trend_scope/services/source-coverage.json) describe las 19 opciones iniciales que tienen evaluación de cobertura en el asistente. Los límites por colección sirven para una evaluación previa. La disponibilidad efectiva depende del punto, la estación o la entidad solicitada.
+
+### Selección automática de estaciones y entidades
+
+Para NOAA diario y mensual, PSMSL, INA y SWOT, marcá un punto o dibujá un área y elegí la variable. Si hay varias selecciones, indicá cuál debe usar la fuente. Al pulsar **Procesar**, Earth Detective consulta los catálogos y prueba hasta 12 candidatos por orden de cercanía. Para puntos busca NOAA, PSMSL e INA hasta 150 km, tramos SWOT hasta 20 km y lagos SWOT hasta 10 km. Para áreas, busca estaciones dentro del polígono y entidades SWOT que lo intersectan, ordenadas por distancia al centro de su extensión. Elige el primer candidato con al menos un dato de la variable en las fechas solicitadas. El resultado indica la entidad elegida, su ID y la distancia.
 
 ### Comprobaciones directas del 14 de noviembre de 2026
 
@@ -24,7 +50,7 @@ En los 24 puntos terrestres, NASA POWER devolvió seis variables, ERA5 devolvió
 
 El conector de Open-Meteo usa `cell_selection=land`. El muestreo marino de ERA5 incluye una prueba separada con `cell_selection=sea`, disponible en el proveedor y pendiente de integrar en la app. ERA5-Land es un producto terrestre. Las variables de NASA POWER y ERA5 probadas en el mar describen condiciones atmosféricas o radiación, con la humedad radicular y la ET₀ sujetas a sus propias limitaciones de uso.
 
-NOAA GSOM requiere una estación con observaciones de la variable elegida. SWOT Hydrocron usa las colecciones de tramos fluviales y lagos. Su cobertura se evalúa por identificador y sigue pendiente un inventario nacional por entidad. Las variables oceanográficas, como temperatura superficial del mar y altura de ola, requieren productos marinos específicos.
+NOAA GSOM requiere una estación con observaciones de la variable elegida. SWOT Hydrocron usa las colecciones de tramos fluviales y lagos. La selección automática usa el catálogo GHCN de NOAA y los catálogos SWORD v17b y PLD para los identificadores de Hydrocron. Las variables oceanográficas, como temperatura superficial del mar y altura de ola, requieren productos marinos específicos.
 
 El inventario se basa en `Memoria/General/Recursos_Earth_System_Trend_Detective.txt`. Las rutas utilizables se registran en `trend_scope/services/catalog.py`. Cada ruta identifica un mecanismo de acceso. Una misma colección puede aparecer por varias rutas.
 
@@ -32,8 +58,8 @@ El inventario se basa en `Memoria/General/Recursos_Earth_System_Trend_Detective.
 
 | Recurso | Datos y requisitos | Estado |
 |---|---|---|
-| AppEEARS | Producto con versión, capa, período y punto o área. Earthdata Login para crear trabajos, consultar estado y descargar. El formato y la proyección dependen de la extracción. | Metadatos consultados |
-| NOAA CDO / NCEI | Separar API CDO v2 con token y Data Access Service. Para series de estación, usar ID de colección, códigos de variable, IDs de estación y fechas. | Data Access Service integrado para temperatura y precipitación mensual |
+| AppEEARS | Producto con versión, capa, período y punto o área. Earthdata Login para crear trabajos, consultar estado y descargar. El formato y la proyección dependen de la extracción. | Catálogo y descarga integrados |
+| NOAA CDO / NCEI | Separar API CDO v2 con token y Data Access Service. Para series de estación, usar ID de colección, códigos de variable, IDs de estación y fechas. | Data Access Service integrado para series mensuales y diarias |
 | KNMI Climate Explorer | Portal de series y grillas. Identificar archivo, producto, período y unidad antes de automatizar. | Página accesible. Descarga programática pendiente. |
 | RADARSAT RCM | Ficha de misión con distribución por EODMS. Requiere identificar colección, escena o filtros de búsqueda y permisos para el producto. | Ficha pública consultada. Acceso a imágenes pendiente. |
 | GEO.ca | Catálogo. Para la ruta STAC, elegir colección, geometría o filtros espaciales según el producto, período y clave del archivo. Registrar el ID del ítem devuelto. | Catálogo STAC consultado |

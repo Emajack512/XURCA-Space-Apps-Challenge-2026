@@ -104,3 +104,10 @@ def test_incomplete_configuration_is_rejected_before_fetch():
         validate_investigation({"schemaVersion": 1, "time": {"start": "2000-01-01", "end": "2020-01-01"},
                                 "sources": [{"id": "temperature", "access": "nasa.power.monthly", "upstream": {"variableId": "T2M"}}],
                                 "geography": {"selection": {"features": []}}})
+
+
+@pytest.mark.parametrize("route", ["noaa.ncei.station", "nasa.swot.hydrocron", "usgs.earthquakes", "noaa.cpc.oni"])
+def test_merged_sources_allow_geographic_resolution_and_new_routes(route):
+    validate_investigation({"schemaVersion": 1, "time": {"start": "2000-01-01", "end": "2020-01-01"},
+        "sources": [{"id": "test", "access": route, "upstream": {"geometryId": "point", "variableId": "test", "selectors": {}}}],
+        "geography": {"selection": {"features": [{"id": "point", "geometry": {"type": "Point", "coordinates": [-66, -33]}}]}}})

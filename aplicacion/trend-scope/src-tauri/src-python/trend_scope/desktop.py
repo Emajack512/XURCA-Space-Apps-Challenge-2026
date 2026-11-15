@@ -7,14 +7,17 @@ from pytauri.ipc import InvokeException
 from pydantic import BaseModel
 
 import json
+from typing import Optional
 
 from .main import RegressionPayload, execute_regression as execute_regression_service
 from .services.acquisition import acquire
+from .services.appeears import catalog as appeears_catalog
 from .services.assistant import AssistantQuestion, interpret
 from .services.assistant_providers import Connection, configure_connection, connection_status, forget_connection
 from .services.evidence import with_evidence
 from .services.coverage import CoverageRequest, coverage
 from .services.public_sources import find_places
+from .services.station_catalogs import ina_variables
 
 from .configuration import (
     ConfigurationName,
@@ -48,6 +51,26 @@ async def acquire_data(body: AcquisitionRequest) -> str:
     except ValueError as error:
         raise InvokeException(str(error)) from error
     return json.dumps(series, allow_nan=False)
+
+
+class AppEEARSCatalogRequest(BaseModel):
+    product: Optional[str] = None
+
+
+@commands.command()
+async def list_appeears(body: AppEEARSCatalogRequest) -> list:
+    try:
+        return await to_thread.run_sync(appeears_catalog, body.product)
+    except ValueError as error:
+        raise InvokeException(str(error)) from error
+
+
+@commands.command()
+async def list_ina_variables() -> list:
+    try:
+        return await to_thread.run_sync(ina_variables)
+    except ValueError as error:
+        raise InvokeException(str(error)) from error
 
 
 class PlaceRequest(BaseModel):
