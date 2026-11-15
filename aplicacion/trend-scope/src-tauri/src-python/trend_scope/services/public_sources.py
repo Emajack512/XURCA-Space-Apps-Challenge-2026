@@ -117,9 +117,18 @@ def find_world_cities(query, language):
         "https://photon.komoot.io/api/", "Photon",
         q=query.strip(), layer="city", limit=8, lang="en" if language == "en" else "default",
     )
+    # Photon can return administrative boundaries alongside the actual town.
+    # Prefer a place feature only within the same named province and country.
+    features = payload.get("features", [])
+    def identity(props):
+        return tuple((props.get(key) or "").casefold() for key in ("name", "state", "country"))
+    towns = {identity(feature["properties"]) for feature in features
+             if feature["properties"].get("osm_key") == "place"}
     places = []
-    for feature in payload.get("features", []):
+    for feature in features:
         props = feature["properties"]
+        if props.get("osm_key") == "boundary" and identity(props) in towns:
+            continue
         if not props.get("name") or feature["geometry"]["type"] != "Point":
             continue
         places.append({

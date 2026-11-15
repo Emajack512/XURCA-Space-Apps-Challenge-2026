@@ -13,7 +13,6 @@ from .main import RegressionPayload, execute_regression as execute_regression_se
 from .services.acquisition import acquire
 from .services.appeears import catalog as appeears_catalog
 from .services.assistant import AssistantQuestion, interpret
-from .services.assistant_providers import Connection, configure_connection, connection_status, forget_connection
 from .services.evidence import with_evidence
 from .services.coverage import CoverageRequest, coverage
 from .services.public_sources import find_places
@@ -104,24 +103,6 @@ async def interpret_question(body: AssistantQuestion) -> dict:
         return await to_thread.run_sync(interpret, body)
     except ValueError as error:
         raise InvokeException(str(error)) from error
-
-
-@commands.command()
-async def assistant_status() -> dict:
-    return connection_status()
-
-
-@commands.command()
-async def configure_assistant(body: Connection) -> dict:
-    try:
-        return await to_thread.run_sync(configure_connection, body)
-    except ValueError as error:
-        raise InvokeException(str(error)) from error
-
-
-@commands.command()
-async def disconnect_assistant() -> dict:
-    return forget_connection()
 
 
 def main() -> int:

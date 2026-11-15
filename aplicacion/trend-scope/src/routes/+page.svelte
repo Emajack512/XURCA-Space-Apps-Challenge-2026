@@ -29,6 +29,7 @@
   let latitude = $state('');
   let longitude = $state('');
   let polygonInput = $state('');
+  let selectionName = $state('');
   let editingFeature = $state(null);
   let coordinateMode = $state('point');
   let modalError = $state('');
@@ -130,7 +131,20 @@
     chartId = null;
     notice = '';
     try {
-      const series = await acquireData(investigation);
+      const acquired = await acquireData(investigation);
+      const sources = new Map(investigation.sources.map(source => [source.id, source]));
+      const features = new Map(investigation.geography.selection.features.map(feature => [feature.id, feature]));
+      const series = acquired.map(item => {
+        const source = sources.get(item.id);
+        const feature = features.get(source?.upstream.geometryId);
+        const name = feature?.properties?.name?.trim();
+        const region = ['Polygon', 'MultiPolygon'].includes(feature?.geometry.type);
+        const named = name && !['Polígono', 'Polígono manual', 'Rectángulo'].includes(name);
+        const placeLabel = region
+          ? named ? name + ' ' + $translate('y alrededores') : $translate('Área seleccionada')
+          : name;
+        return { ...item, placeLabel };
+      });
       result = { key: startedWith, series };
       if (startedWith === configKey) chartId = series[0]?.id ?? null;
     } catch (error) {
@@ -173,6 +187,7 @@
   }
   function openCoordinates(feature = null) {
     editingFeature = feature;
+    selectionName = feature?.properties?.name ?? '';
     coordinateMode = feature?.geometry.type === 'Polygon' ? 'polygon' : 'point';
     longitude = feature?.geometry.type === 'Point' ? String(feature.geometry.coordinates[0]) : '';
     latitude = feature?.geometry.type === 'Point' ? String(feature.geometry.coordinates[1]) : '';
@@ -189,7 +204,10 @@
     }
     editData(data => {
       const feature = data.geography.selection.features.find(item => item.id === editingFeature.id);
-      if (feature) feature.geometry = { type, coordinates };
+      if (feature) {
+        feature.geometry = { type, coordinates };
+        feature.properties.name = name;
+      }
     });
   }
 
@@ -202,7 +220,7 @@
         modalError = 'Ingresá longitud entre −180 y 180 y latitud entre −90 y 90.';
         return;
       }
-      saveSelection('Point', center);
+      saveSelection('Point', center, selectionName.trim());
     } else {
       const points = polygonInput.trim().split(/\r?\n/).map(line => line.trim().split(/[ ,]+/).map(Number));
       if (points.some(point => point.length !== 2 || !validCoordinates(...point))) {
@@ -211,7 +229,7 @@
       }
       const ring = closedRegion(points);
       if (!ring) { modalError = 'Ingresá al menos tres vértices que delimiten un área.'; return; }
-      saveSelection('Polygon', ring, 'Polígono manual');
+      saveSelection('Polygon', ring, selectionName.trim());
       center = points[0];
     }
     editVisual(visual => {
@@ -272,8 +290,8 @@
     <div class="view-tabs" role="group" aria-label={$translate('Vistas de la consulta')}>
       <button class:active={!activeChart} aria-pressed={!activeChart} onclick={() => chartId = null}>{$translate('Espacio de trabajo')}</button>
       {#each currentSeries as item (item.id)}
-        {@const label = $translate(catalog.find(source => source.id === item.id)?.label ?? item.label ?? item.variable)}
-        <button class:active={activeChart?.id === item.id} aria-pressed={activeChart?.id === item.id} title={label} onclick={() => chartId = item.id}><span>{label}</span></button>
+        {@const label = $translate(catalog.find(source => source.id === item.id.split('::')[0])?.label ?? item.label ?? item.variable)}
+        <button class:active={activeChart?.id === item.id} aria-pressed={activeChart?.id === item.id} title={item.placeLabel ? item.placeLabel + ' · ' + label : label} onclick={() => chartId = item.id}><span>{item.placeLabel ?? label}{item.placeLabel && currentSeries.some(other => other.id !== item.id && other.placeLabel === item.placeLabel) ? ' · ' + label : ''}</span></button>
       {/each}
     </div>
     <div class="run-actions">
@@ -317,6 +335,7 @@
     <header><strong id="dialog-title">{$translate(modal === 'coordinates' ? 'Coordenadas WGS 84' : modal === 'restore' ? 'Recuperar configuración' : modal === 'chart-resolution' ? 'Resolución gráfica' : modal === 'chart-export' ? 'Guardar gráfica…' : 'Preferencias')}</strong><button class="icon-button" aria-label={$translate("Cerrar")} onclick={() => dialog.close()}><X size={17}/></button></header>
     {#if modal === 'coordinates'}
       <form onsubmit={submitCoordinates}>
+        <label>{$translate("Nombre del lugar")}<input maxlength="100" bind:value={selectionName}/></label>
         <label>{$translate("Geometría")}<select bind:value={coordinateMode}><option value="point">{$translate("Punto")}</option><option value="polygon">{$translate("Polígono")}</option></select></label>
         {#if coordinateMode === 'point'}
           <div class="field-pair"><label>{$translate("Longitud")}<input type="number" min="-180" max="180" step="any" value={longitude} oninput={event => longitude = event.currentTarget.value}/></label><label>{$translate("Latitud")}<input type="number" min="-90" max="90" step="any" value={latitude} oninput={event => latitude = event.currentTarget.value}/></label></div>
@@ -344,7 +363,7 @@
         <label>{$translate('Gráfica')}
           <select bind:value={exportId}>
             {#each exportableSeries as item (item.id)}
-              <option value={item.id}>{$translate(catalog.find(source => source.id === item.id)?.label ?? item.variable)}</option>
+              <option value={item.id}>{$translate(catalog.find(source => source.id === item.id.split('::')[0])?.label ?? item.variable)}</option>
             {/each}
           </select>
         </label>

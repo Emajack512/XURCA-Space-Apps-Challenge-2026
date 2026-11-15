@@ -4,7 +4,7 @@ Primera versión de la aplicación de escritorio de XURCA para el desafío Earth
 
 ## Ejecutar en Windows
 
-Con las dependencias preparadas, abrí **Iniciar Earth Detective.cmd**. En el panel derecho podés conectar Google Gemini u OpenAI con tu API key, describir una investigación y pedir explicaciones sobre los resultados. Seguí la [guía del chat de IA](docs/chat-ia.md).
+Con las dependencias preparadas, abrí **Iniciar Earth Detective.cmd**. En el panel derecho podés describir una investigación y pedir explicaciones con Gemini cuando el servicio del equipo está habilitado. Seguí la [guía del chat de IA](docs/chat-ia.md).
 
 Desde esta carpeta, con Node.js, pnpm, Rust con toolchain MSVC, Microsoft C++ Build Tools, WebView2 y una instalación de Python compatible con PyTauri:
 

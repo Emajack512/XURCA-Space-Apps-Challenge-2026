@@ -10,7 +10,7 @@
   let { series } = $props();
 
   function location(item, t) {
-    const value = item.location ?? item.coordinates.join(', ') + ' (lon, lat)';
+    const value = item.location ?? (item.coordinates ?? []).join(', ') + ' (lon, lat)';
     return value.replace(/^(Estación|Tramo de río|Lago|Punto) /, (_, kind) => t(kind) + ' ')
       .replace(' · celda ', ' · ' + t('Celda').toLocaleLowerCase() + ' ');
   }
@@ -22,11 +22,11 @@
   <div class="results-scroll">
     {#each series as item (item.id)}
       {@const available = item.points.filter(point => point.value !== null).length}
-      {@const label = $translate(catalog.find(source => source.id === item.id)?.label ?? item.label ?? item.variable)}
+      {@const label = $translate(catalog.find(source => source.id === item.id.split('::')[0])?.label ?? item.label ?? item.variable)}
       {@const period = item.cadence === 'daily' ? 'días con datos' : item.cadence && item.cadence !== 'monthly' ? 'observaciones con datos' : 'meses con datos'}
       <article class="chart-card" data-series-id={item.id}>
         <header><strong>{label}</strong></header>
-        <p class="quiet">{item.provider} · {$translate(item.unit)} · {location(item, $translate)}</p>
+        <p class="quiet">{item.provider} · {$translate(item.unit)} · {item.placeLabel ? item.placeLabel + ' · ' : ''}{location(item, $translate)}</p>
         {#if item.message}<p>{item.message}</p>{/if}
         {#if item.downloadPath}<p class="quiet"><code>{item.downloadPath}</code></p>{/if}
         {#if !item.message}<p class="quiet">{available} {$translate('de')} {item.points.length} {$translate(period)}</p>{/if}

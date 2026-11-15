@@ -6,10 +6,10 @@
   import { workspace } from '$lib/stores/workspace.js';
   import { assistantCatalog as catalog } from '$lib/services/sources.js';
   import { configureWorkspace } from '$lib/services/assistantConfiguration.js';
-  import AssistantConnection from './AssistantConnection.svelte';
 
   let { series = [], processing = false, onprocess = () => {} } = $props();
-  let connected = $state(false);
+  let failedQuestion = $state('');
+  let recovering = $state(false);
 
   let draft = $state('');
   let messages = $state([]);
@@ -19,7 +19,7 @@
   const sourceOptions = catalog.map(item => ({ id: item.id, label: item.label,
     variable: item.variable, access: item.route.id, code: item.code, selection: item.featureType ?? (item.route.id === 'noaa.ncei.station' ? 'Station' : 'Point') }));
 
-  function contextFor(snapshot) {
+  function contextFor(snapshot, retryQuestion) {
     const { data, visual } = snapshot;
     const current = {
       title: data.title?.slice(0, 500), objective: data.objective?.slice(0, 500),
@@ -34,7 +34,8 @@
       visual
     };
     const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
-    const history = messages.slice(-8).map(({ role, text, status }) => ({ role, text: (text + (status ? '\n' + status : '')).slice(0, 900) }));
+    const history = messages.filter(message => !message.temporary).slice(-8).map(({ role, text, status }) => ({ role, text: (text + (status ? '\n' + status : '')).slice(0, 900) }));
+    if (retryQuestion && history.at(-1)?.role === 'user' && history.at(-1)?.text === retryQuestion.slice(0, 900)) history.pop();
     const results = series.filter(item => item.summary).slice(0, 4).map(item => item.summary);
     const prefix = { today, current, sourceOptions, results, omittedResults: Math.max(0, series.length - results.length) };
     while (history.length && JSON.stringify({ ...prefix, history }).length > 18000) history.shift();
@@ -50,64 +51,103 @@
     if (thread) thread.scrollTop = thread.scrollHeight;
   }
 
-  async function send(event, suggested = '') {
+  async function send(event, suggested = '', retry = false) {
     event.preventDefault();
     const question = suggested || draft.trim();
-    if (busy || processing || !connected || !question) return;
+    if (busy || processing || !question) return;
     if (!isTauri()) {
       messages.push({ role: 'assistant', text: tr('Abrí la app de escritorio para usar el chat.', 'Open the desktop app to use the chat.') });
       await scrollToLatest();
       return;
     }
     const snapshot = $workspace;
+    const hasPoint = snapshot.data.geography.selection.features.some(feature => feature.geometry.type === 'Point');
+    if (!hasPoint && /\b(punto seleccionado|selected point)\b/i.test(question)) {
+      if (!retry) messages.push({ role: 'user', text: question });
+      messages.push({ role: 'assistant', text: tr(
+        'Todavía no hay un punto seleccionado. Escribí el nombre de la localidad o marcá un punto en el mapa.',
+        'There is no selected point yet. Enter the town name or mark a point on the map.'
+      ) });
+      failedQuestion = '';
+      if (!retry) draft = '';
+      await scrollToLatest();
+      return;
+    }
     const original = JSON.stringify(snapshot);
     let context;
-    try { context = contextFor(snapshot); }
+    try { context = contextFor(snapshot, retry ? question : null); }
     catch (error) { messages.push({ role: 'assistant', text: error.message }); return; }
     const evidenceKey = JSON.stringify(series.map(item => item.summary));
     const language = snapshot.visual.language;
-    messages.push({ role: 'user', text: question });
+    if (!retry) messages.push({ role: 'user', text: question });
+    failedQuestion = '';
     draft = '';
     busy = true;
     await scrollToLatest();
     try {
-      const reply = await pyInvoke('interpret_question', {
-        question, context, language, endpoint: import.meta.env.VITE_ASSISTANT_ENDPOINT || null
-      });
-      let status = '';
-      let applied = null;
-      if (JSON.stringify($workspace) !== original || JSON.stringify(series.map(item => item.summary)) !== evidenceKey) {
-        throw new Error('La investigación o sus resultados cambiaron durante la respuesta. Enviá el pedido de nuevo.');
-      }
-      if (Object.keys(reply.changes).length) {
-        try {
-          const next = await configureWorkspace(snapshot, reply.changes, pyInvoke, language);
-          if (JSON.stringify($workspace) !== original) {
-            throw new Error(tr('La configuración cambió durante la consulta. Pedime el cambio de nuevo.', 'Settings changed during this reply. Ask me again.'));
-          }
-          if (JSON.stringify(next) !== original) {
-            workspace.set(next);
-            applied = reply.changes;
-            status = tr('Configuración actualizada. Pulsá Procesar para ejecutar la consulta.', 'Settings updated. Select Process to run the query.');
-          }
-        } catch (error) {
-          status = tr('No se aplicaron cambios. ', 'No settings were applied. ') + String(error.message ?? error);
+      const ensureCurrent = () => {
+        if (JSON.stringify($workspace) !== original || JSON.stringify(series.map(item => item.summary)) !== evidenceKey) {
+          throw new Error(tr('La investigación cambió. Volvé a enviar la consulta.', 'The investigation changed. Please resend the question.'));
         }
+      };
+      let feedback = '';
+      for (let attempt = 0; attempt < 2; attempt++) {
+        let reply;
+        let next;
+        try {
+          reply = await pyInvoke('interpret_question', { question, context, language, feedback });
+        } catch (error) {
+          const reason = String(error.message ?? error);
+          if (attempt || /HTTP 4[0-9]{2}/.test(reason)) throw error;
+          feedback = reason.includes('propuesta inválida')
+            ? 'The previous reply violated the response schema. Return a valid proposal for the original question.'
+            : '';
+          recovering = true;
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          continue;
+        }
+        ensureCurrent();
+        try {
+          if (Object.keys(reply.changes).length) next = await configureWorkspace(snapshot, reply.changes, pyInvoke, language);
+        } catch (error) {
+          const reason = String(error.message ?? error);
+          if (/^(Hay varios lugares|No encontré|No pude confirmar)/.test(reason)) {
+            messages.push({ role: 'assistant', text: reason });
+            return;
+          }
+          if (attempt) throw error;
+          feedback = 'The app could not apply the proposal. Correct the configuration, or ask a simple question if essential information is missing. Do not invent data. Validation detail: ' + reason.slice(0, 400);
+          recovering = true;
+          continue;
+        }
+        ensureCurrent();
+        const applied = next && JSON.stringify(next) !== original ? reply.changes : null;
+        if (applied) workspace.set(next);
+        messages.push({ role: 'assistant', text: reply.message, applied,
+          status: applied ? tr('Configuración actualizada. Pulsá Procesar para consultar los datos.', 'Settings updated. Select Process to fetch the data.') : '',
+          evidence: series.length && !Object.keys(reply.changes).length ? original : null });
+        return;
       }
-      messages.push({ role: 'assistant', text: reply.message, status, applied,
-        evidence: series.length && !Object.keys(reply.changes).length ? original : null });
     } catch (error) {
-      messages.push({ role: 'assistant', text: String(error.message ?? error) });
-      if (!draft) draft = question;
+      const reason = String(error.message ?? error);
+      const quota = reason.includes('HTTP 429');
+      const retryAfter = reason.match(/Retry-After: (\d+)/)?.[1];
+      const message = quota
+        ? (retryAfter
+          ? tr(`El asistente alcanzó su límite. Reintentá en ${retryAfter} segundos.`, `The assistant reached its limit. Retry in ${retryAfter} seconds.`)
+          : tr('El asistente alcanzó su límite de consultas. Probá más tarde.', 'The assistant reached its request limit. Try again later.'))
+        : tr('No pude completar tu consulta. Podés reintentar sin perder la conversación.', 'I could not complete your request. You can retry without losing the conversation.');
+      messages.push({ role: 'assistant', text: message, temporary: true });
+      failedQuestion = question;
     } finally {
       busy = false;
+      recovering = false;
       await scrollToLatest();
     }
   }
 </script>
 
 <div class="chat">
-  <AssistantConnection onstatus={value => connected = value}/>
   <div class="thread" role="log" aria-label={tr('Conversación con la IA', 'AI conversation')} bind:this={thread}>
     {#if !messages.length}
       <p>{tr('¿Qué querés conocer de este lugar?', 'What would you like to know about this place?')}</p>
@@ -124,17 +164,20 @@
         {#if message.applied}<details><summary>Cambios aplicados (JSON)</summary><pre>{JSON.stringify(message.applied, null, 2)}</pre></details>{/if}
       </article>
     {/each}
-    {#if busy}<p class="quiet">{tr('Preparando respuesta…', 'Preparing a reply…')}</p>{/if}
+    {#if busy}<p class="quiet">{recovering ? tr('Volviendo a intentar…', 'Trying again…') : tr('Preparando respuesta…', 'Preparing a reply…')}</p>{/if}
   </div>
   <div class="actions">
+    {#if failedQuestion}
+      <button onclick={event => send(event, failedQuestion, true)} disabled={busy || processing}>{tr('Reintentar consulta', 'Retry request')}</button>
+    {/if}
     <button onclick={onprocess} disabled={busy || processing}>{processing ? 'Procesando…' : 'Procesar investigación'}</button>
-    <button onclick={event => send(event, 'Explicame los resultados actuales en lenguaje sencillo, con sus fuentes, unidades y limitaciones.')} disabled={!connected || busy || processing || !series.length}>Explicar resultados</button>
+    <button onclick={event => send(event, 'Explicame los resultados actuales en lenguaje sencillo, con sus fuentes, unidades y limitaciones.')} disabled={busy || processing || !series.length}>Explicar resultados</button>
   </div>
   <form onsubmit={send}>
     <textarea aria-label={tr('Mensaje', 'Message')} placeholder={tr('Escribí un mensaje…', 'Write a message…')}
       maxlength="1200" rows="2" bind:value={draft}
       onkeydown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }}></textarea>
-    <button type="submit" class="primary" disabled={!connected || busy || processing || !draft.trim()} aria-label={tr('Enviar mensaje', 'Send message')}>
+    <button type="submit" class="primary" disabled={busy || processing || !draft.trim()} aria-label={tr('Enviar mensaje', 'Send message')}>
       <Send size={16}/>
     </button>
   </form>

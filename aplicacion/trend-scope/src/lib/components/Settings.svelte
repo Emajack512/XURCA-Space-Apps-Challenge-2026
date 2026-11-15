@@ -126,7 +126,7 @@
 
 {#snippet sources()}
   {#each data.sources as item (item.id)}
-    {@const entry = catalog.find(source => source.id === item.id)}
+    {@const entry = catalog.find(source => source.id === item.id.split('::')[0])}
     {@const selectedRoute = providers.find(route => route.id === item.access)}
     {@const resolvesEntity = geographicEntityRoutes.has(item.access)}
     {@const geometryTypes = resolvesEntity ? entityGeometries : selectedRoute?.geometry ?? ['Point']}

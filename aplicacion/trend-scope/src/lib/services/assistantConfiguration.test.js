@@ -38,3 +38,53 @@ test('incompatible coverage rejects the entire proposal, including title and the
     async () => ({ matches: [{ access: 'nasa.power.monthly', variables: ['T2M'], status: 'partial' }] }), 'es'), /compatibles/);
   assert.deepEqual(initial, snapshot());
 });
+
+const locations = [
+  ['San Luis', 'San Luis', -66.335, -33.302],
+  ['9 de Julio', 'Buenos Aires', -60.884, -35.445],
+  ['El Volcán', 'San Luis', -66.183, -33.259]
+];
+const multiple = {
+  places: locations.map(([name, province]) => ({ name: `${name}, ${province}, Argentina`, kind: 'localidades' })),
+  sources: [{ id: 'power-precipitation' }, { id: 'noaa-precipitation' }],
+  time: { start: '2005-01-01', end: '2024-12-31' }
+};
+const resolveLocations = async (command, args) => {
+  if (command === 'search_places') {
+    const [name, province, longitude, latitude] = locations.find(([name]) => args.query.startsWith(name));
+    return JSON.stringify([{ name, province, country: 'Argentina', coordinates: [longitude, latitude] },
+      { name, province: 'Otra provincia', country: 'Argentina', coordinates: [0, 0] }]);
+  }
+  return { matches: [
+    { access: 'nasa.power.monthly', variables: ['PRECTOTCORR'], status: 'compatible', cadence: 'monthly' },
+    { access: 'noaa.ncei.station', variables: ['PRCP'], status: 'unverified', cadence: 'monthly' }
+  ] };
+};
+
+test('three named towns create six distinct source-point series and survive follow-ups', async () => {
+  const initial = snapshot();
+  initial.data.geography.selection.features = [];
+  const configured = await configureWorkspace(initial, multiple, resolveLocations, 'es');
+  assert.equal(configured.data.geography.selection.features.length, 3);
+  assert.equal(configured.data.sources.length, 6);
+  assert.equal(new Set(configured.data.sources.map(source => source.id)).size, 6);
+  for (const point of configured.data.geography.selection.features) {
+    assert.equal(configured.data.sources.filter(source => source.upstream.geometryId === point.id).length, 2);
+  }
+  const again = await configureWorkspace(configured, multiple, resolveLocations, 'es');
+  assert.deepEqual(again.data, configured.data);
+  const later = await configureWorkspace(configured, { time: { start: '2010-01-01' } }, resolveLocations, 'es');
+  assert.deepEqual(later.data.sources, configured.data.sources);
+});
+
+test('an unresolved place rejects the entire multi-place proposal', async () => {
+  const initial = snapshot();
+  await assert.rejects(configureWorkspace(initial, multiple, async (command, args) =>
+    args?.query?.startsWith('El Volcán') ? '[]' : resolveLocations(command, args), 'es'), /No encontré/);
+  assert.deepEqual(initial, snapshot());
+});
+
+test('explicit missing point references are rejected instead of silently reassigned', async () => {
+  await assert.rejects(configureWorkspace(snapshot(), { point: { longitude: -66, latitude: -33 },
+    sources: [{ id: 'power-temperature', pointId: 'missing' }] }, coverage, 'es'), /no existe/);
+});

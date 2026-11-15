@@ -36,13 +36,13 @@ function bounded(value, min, max) {
 
 function validate(changes) {
   if (!checkShape(changes, contract.schema.properties.changes)) throw new Error('La IA propuso campos de configuración inválidos.');
-  const { point, place, polygon, sources, appearance, workspace, camera } = changes;
-  if ([point, place, polygon].filter(Boolean).length > 1) throw new Error('Indicá una sola selección geográfica por mensaje.');
+  const { point, place, places, polygon, sources, appearance, workspace, camera } = changes;
+  if ([point, place, places, polygon].filter(Boolean).length > 1) throw new Error('Indicá una sola selección geográfica por mensaje.');
   if (point && !validCoordinates(point.longitude, point.latitude)) throw new Error('Las coordenadas están fuera del rango WGS 84.');
   if (polygon && (polygon.length > 100 || !polygon.every(p => p.length === 2 && validCoordinates(...p)) || !closedRegion(polygon))) {
     throw new Error('El polígono requiere vértices válidos en orden longitud, latitud.');
   }
-  if (sources && (sources.length > catalog.length || new Set(sources.map(item => item.id)).size !== sources.length)) {
+  if (sources && (sources.length > 25 || new Set(sources.map(item => JSON.stringify([item.id, item.pointId ?? '']))).size !== sources.length)) {
     throw new Error('La lista de fuentes contiene variables duplicadas o excede el catálogo.');
   }
   if (appearance?.accent !== undefined && !/^#[0-9a-f]{6}$/i.test(appearance.accent)) throw new Error('El color requiere un valor hexadecimal de seis dígitos.');
@@ -55,6 +55,8 @@ function validate(changes) {
   }
 }
 
+const catalogEntry = source => catalog.find(entry => entry.id === source.id.split('::')[0]);
+
 function configureSource(item, points, newPoint, existing) {
   const entry = catalog.find(source => source.id === item.id);
   if (!entry) throw new Error('Una variable propuesta no está en el catálogo: ' + item.id);
@@ -62,6 +64,7 @@ function configureSource(item, points, newPoint, existing) {
   const { upstream } = config;
   const compatible = geographicEntityRoutes.has(config.access)
     ? points : points.filter(item => item.geometry.type === 'Point');
+  if (item.pointId && !compatible.some(point => point.id === item.pointId)) throw new Error('La selección indicada no existe.');
   const preferred = item.pointId || newPoint?.id || existing?.upstream.geometryId;
   const selection = compatible.find(item => item.id === preferred) ?? (compatible.length === 1 ? compatible[0] : null);
   if (!selection) throw new Error('Elegí una selección geográfica para ' + entry.label + '.');
@@ -85,40 +88,68 @@ export async function configureWorkspace(snapshot, changes, invoke, language) {
     selection.features = [];
     for (const source of data.sources) source.upstream.geometryId = null;
   }
-  let point = changes.point;
-  if (changes.place) {
-    const { name, kind } = changes.place;
+  if (changes.places && (!changes.places.length || changes.places.length > 10)) throw new Error('Indicá entre uno y diez lugares.');
+  const pointsToAdd = changes.point ? [changes.point] : [];
+  for (const { name, kind } of changes.places ?? (changes.place ? [changes.place] : [])) {
     if (name.trim().length < 2 || name.length > 100) throw new Error('Indicá un nombre de lugar válido.');
-    const matches = JSON.parse(await invoke('search_places', { query: name, kind, language }));
+    const found = JSON.parse(await invoke('search_places', { query: name, kind, language }));
+    const normalize = text => (text ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    const parts = name.split(',').map(normalize).filter(Boolean);
+    const exact = found.filter(match => normalize(match.name) === parts[0]
+      && parts.slice(1).every(part => [match.province, match.country].some(value => normalize(value) === part)));
+    if (!exact.length && found.length === 1) {
+      const candidate = found[0];
+      throw new Error('No pude confirmar ' + name + '. El buscador devolvió: '
+        + [candidate.name, candidate.province, candidate.country].filter(Boolean).join(', ') + '. Precisá la localidad.');
+    }
+    const matches = exact.length ? exact : found;
+
     if (matches.length !== 1) {
       const names = matches.slice(0, 4).map(match => [match.name, match.province, match.country].filter(Boolean).join(', '));
-      throw new Error(names.length ? 'Hay varios lugares posibles. Indicá cuál: ' + names.join(' / ') : 'No encontré ese lugar. Indicá la ciudad, provincia o coordenadas.');
+      throw new Error(names.length ? 'Hay varios lugares posibles para ' + name + '. Indicá cuál: ' + names.join(' / ') : 'No encontré ese lugar. Indicá la ciudad, provincia o coordenadas.');
     }
     const [{ coordinates: [longitude, latitude], name: label }] = matches;
     if (!validCoordinates(longitude, latitude)) throw new Error('El lugar no tiene coordenadas válidas.');
-    point = { longitude, latitude, name: label };
+    pointsToAdd.push({ longitude, latitude, name: label });
   }
-  let feature;
-  if (point || changes.polygon) {
-    feature = {
-      type: 'Feature', id: crypto.randomUUID(), properties: { name: point?.name ?? '' },
-      geometry: point ? { type: 'Point', coordinates: [point.longitude, point.latitude] }
-        : { type: 'Polygon', coordinates: closedRegion(changes.polygon) }
-    };
-    selection.features.push(feature);
-    if (point) Object.assign(visual.map.camera, { longitude: point.longitude, latitude: point.latitude });
+  const newFeatures = [];
+  for (const point of pointsToAdd) {
+    let feature = selection.features.find(item => item.geometry.type === 'Point'
+      && item.geometry.coordinates[0] === point.longitude && item.geometry.coordinates[1] === point.latitude);
+    if (!feature) {
+      feature = { type: 'Feature', id: crypto.randomUUID(), properties: { name: point.name ?? '' },
+        geometry: { type: 'Point', coordinates: [point.longitude, point.latitude] } };
+      selection.features.push(feature);
+    }
+    if (!newFeatures.includes(feature)) newFeatures.push(feature);
   }
-  if (changes.sources || point) {
-    const points = selection.features;
-    const requests = changes.sources ?? data.sources.filter(item => catalog.some(entry => entry.id === item.id))
-      .map(item => ({ id: item.id }));
-    const configured = requests.map(item => configureSource(item, points, feature, data.sources.find(source => source.id === item.id)));
-    if (changes.sources) data.sources = configured;
-    else data.sources = data.sources.map(item => configured.find(source => source.id === item.id) ?? item);
+  if (changes.polygon) selection.features.push({ type: 'Feature', id: crypto.randomUUID(), properties: { name: changes.polygonName?.slice(0, 100).trim() ?? '' },
+    geometry: { type: 'Polygon', coordinates: closedRegion(changes.polygon) } });
+  if (newFeatures.length) {
+    const [longitude, latitude] = newFeatures[0].geometry.coordinates;
+    Object.assign(visual.map.camera, { longitude, latitude });
   }
-  if (changes.sources || changes.time || point) {
+  if (changes.sources || newFeatures.length) {
+    const requests = changes.sources ?? [...new Set(data.sources.filter(catalogEntry).map(source => catalogEntry(source).id))].map(id => ({ id }));
+    const configured = requests.flatMap(item => {
+      const targets = !item.pointId && newFeatures.length ? newFeatures : [null];
+      return targets.map(feature => configureSource(item, selection.features, feature,
+        data.sources.filter(source => catalogEntry(source)?.id === item.id).length === 1
+          ? data.sources.find(source => catalogEntry(source)?.id === item.id) : null));
+    });
+    const unique = [...new Map(configured.map(source => [source.id + '::' + source.upstream.geometryId, source])).values()];
+    const counts = new Map();
+    for (const source of unique) counts.set(source.id, (counts.get(source.id) ?? 0) + 1);
+    for (const source of unique) {
+      const existing = data.sources.find(item => catalogEntry(item)?.id === source.id && item.upstream.geometryId === source.upstream.geometryId);
+      source.id = existing?.id ?? (counts.get(source.id) > 1 ? source.id + '::' + source.upstream.geometryId : source.id);
+    }
+    data.sources = changes.sources ? unique : [...data.sources.filter(source => !catalogEntry(source)), ...unique];
+    if (data.sources.length > 25) throw new Error('La investigación admite hasta 25 series. Reducí los lugares o variables.');
+  }
+  if (changes.sources || changes.time || newFeatures.length) {
     const cadences = await Promise.all(data.sources.map(async source => {
-      const entry = catalog.find(item => item.id === source.id);
+      const entry = catalogEntry(source);
       if (!entry) return null;
       const scope = source.access === 'noaa.ncei.station' ? 'station'
         : entry.featureType === 'Reach' ? 'river' : entry.featureType === 'PriorLake' ? 'lake' : 'land';
