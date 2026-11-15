@@ -5,6 +5,9 @@ import numpy as np
 
 from ..numeric import array, finite, integer
 
+# Normal-consistency factor: MAD * 1.4826 estimates the standard deviation.
+ROBUST_Z_CONSISTENCY = 1.4826
+
 
 def _labels(groups, shape) -> np.ndarray:
     if np.ma.isMaskedArray(groups):
@@ -67,7 +70,10 @@ def anomalies(values, groups, reference, *, kind) -> dict:
     """Compare observations to an explicit climatology reference (W01).
 
     absolute = x-mean; percent = 100*(x-mean)/mean;
-    standardized = (x-mean)/std; robust_z = (x-median)/MAD (unscaled).
+    standardized = (x-mean)/std; robust_z = (x-median)/(1.4826*MAD).
+    The reference MAD stays unscaled (descriptive, in variable units); the
+    normal-consistency factor 1.4826 is applied only here, so robust_z is
+    comparable with a standard z for normally distributed data.
     Units are input units, percent, or dimensionless respectively. Percent
     requires a meaningful ratio-scale variable; no unit conversion is inferred.
     This does not select a valid baseline, infer trends or estimate uncertainty.
@@ -107,7 +113,10 @@ def anomalies(values, groups, reference, *, kind) -> dict:
         with np.errstate(over='raise', invalid='raise', divide='raise'):
             output = y - center
             if denominator:
-                output = output / stats[denominator][indices]
+                scale = stats[denominator][indices]
+                if kind == 'robust_z':
+                    scale = scale * ROBUST_Z_CONSISTENCY
+                output = output / scale
             if kind == 'percent':
                 output = output * 100
             finite(output)

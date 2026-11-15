@@ -95,4 +95,13 @@ def catalog_registry(*, include_optional: bool = True):
         complexity='O(n) aggregation and memory; twelve scalar gamma fits, solver dependent',
         acceleration='NumPy block sums and SciPy gamma MLE; no performance claim',
         parameter_defaults={'epsilon': 1e-6}), analyze_spi)
+    from .stats.descriptive import analyze_describe
+    registry.register(MethodSpec(
+        method_id='describe', name='Descriptive statistics', version='1.0.0-candidate',
+        category='stats', output_kind='summary', dimensions=(('time',),), min_observations=1,
+        minimum_reason='One observation gives count, mean and extremes; the standard deviation needs two',
+        regularity='strictly increasing; irregular allowed; no missing values',
+        parameters=('quantiles',), dependencies=('numpy',),
+        complexity='O(n log n) time; O(n) memory',
+        acceleration='NumPy; no performance claim'), analyze_describe)
     return registry
