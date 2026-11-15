@@ -1,7 +1,7 @@
 <script>
-  import { chartResolutions } from '$lib/services/charts.js';
+  import { chartCadences, chartResolutions } from '$lib/services/charts.js';
   import { saveChartImage } from '$lib/services/chartExport.js';
-  import { catalog } from '$lib/services/sources.js';
+  import { catalog, geographicEntityRoutes, geometryMatchesScope, sourceMatchesScope } from '$lib/services/sources.js';
   import { translate } from '$lib/services/i18n.js';
   import { onMount, tick } from 'svelte';
   import { Earth, Aperture, Bot, ChartNoAxesCombined, ChevronDown, CircleHelp, Crosshair, Hand, MapPin, Play, Scan, Hexagon, Settings, Settings2, Trash2, X, Save, FolderOpen } from '@lucide/svelte';
@@ -15,7 +15,7 @@
   import { workspace, defaults, editData, editVisual, selectGeometry } from '$lib/stores/workspace.js';
   import { loadWorkspace, saveWorkspace, downloadJson } from '$lib/services/configuration.js';
   import { acquireData } from '$lib/services/acquisition.js';
-  import { coordinateLabel, closedRegion, validCoordinates } from '$lib/services/geography.js';
+  import { coordinateLabel, closedRegion, openPolygonNotice, validCoordinates } from '$lib/services/geography.js';
   import '$lib/styles/dashboard.css';
 
   let detailedMap = $state(true);
@@ -51,6 +51,8 @@
   let exporting = $state(false);
   let dirty = $derived(JSON.stringify($workspace) !== savedConfig);
   let configKey = $derived(JSON.stringify($workspace.data));
+  let savedAccent = $derived($workspace.visual.appearance.accent);
+  let customAccent = $derived(savedAccent?.toLowerCase() === '#57dfc1' ? null : savedAccent);
   let resultStatus = $derived(running ? 'Procesando…' : result?.key === configKey ? 'Consulta completada' : result ? 'Configuración modificada' : 'Sin resultados');
   let selected = $derived($workspace.data.geography.selection.features.at(-1));
   const tools = [
@@ -111,17 +113,27 @@
       exporting = false;
     }
   }
-  function chooseTool(id) { tool = id; vertices = []; }
-  function clearSelection() { vertices = []; editData(data => data.geography.selection.features = []); }
-  /** cfg_data ready to send (point sources bound to the selected point), or null after notifying why not. */
+  function chooseTool(id) { tool = id; vertices = []; if (notice === openPolygonNotice) notice = ''; }
+  function clearSelection() { vertices = []; if (notice === openPolygonNotice) notice = ''; editData(data => data.geography.selection.features = []); }
+  /** cfg_data ready to send (sources filtered by scope, point sources bound to the selected point), or null after notifying why not. */
   function buildInvestigation() {
     const investigation = JSON.parse(configKey);
-    const point = investigation.geography.selection.features.filter(item => item.geometry.type === 'Point');
+    const { scope, selection } = investigation.geography;
     if (!investigation.sources.length) {
       notify('Agregá al menos una variable.');
       return null;
     }
+    investigation.sources = investigation.sources.filter(source => sourceMatchesScope(source, scope, selection.features));
+    if (!investigation.sources.length) {
+      notify($translate('En Fuentes de información, elegí una variable compatible y pulsá Agregar.'));
+      return null;
+    }
+    selection.features = selection.features.filter(item => geometryMatchesScope(item.geometry.type, scope));
+    const point = selection.features.filter(item => item.geometry.type === 'Point');
     for (const source of investigation.sources) {
+      if (geographicEntityRoutes.has(source.access) && !source.upstream.geometryId && selection.features.length === 1) {
+        source.upstream.geometryId = selection.features[0].id;
+      }
       if (!['nasa.power.monthly', 'openmeteo.archive.daily'].includes(source.access)) continue;
       if (point.some(item => item.id === source.upstream.geometryId)) continue;
       if (point.length !== 1) {
@@ -258,18 +270,26 @@
     ['Datos', [['Abrir configuración',() => togglePanel('settings',true)],['Ingresar coordenadas',() => openCoordinates()]]],
     ['Análisis', [['Procesar',run],['Mostrar resultados',() => chartId = currentSeries[0]?.id ?? null],['Análisis estadístico…',openAnalysis]]],
     ['Visualización', [['Resolución gráfica',() => showDialog('chart-resolution')],['Alternar configuración',() => togglePanel('settings')],['Alternar asistente',() => togglePanel('assistantVisible', !assistantVisible)]]],
-    ['Capas', [['Alternar controles de capas',() => togglePanel('layers')]]],
+    ['Capas', [
+      ['Alternar fronteras', () => editVisual(visual => visual.map.layers.countries = !visual.map.layers.countries)],
+      ['Alternar selecciones', () => editVisual(visual => visual.map.layers.selection = !visual.map.layers.selection)]
+    ]],
     ['Exportar', [['Guardar gráfica…',openChartExport],['Descargar cfg_data.json',() => downloadJson('cfg_data.json',$workspace.data)],['Descargar cfg_visual.json',() => downloadJson('cfg_visual.json',$workspace.visual)]]]
   ];
 </script>
 
 <svelte:head><title>Earth Detective</title><meta name="description" content={$translate("Espacio de trabajo para explorar tendencias del sistema terrestre.")}/></svelte:head>
 <svelte:window onkeydown={event => {
+  if (tool === 'polygon' && vertices.length && !dialog?.open &&
+      ['Enter', 'Escape'].includes(event.key) && !event.target?.closest?.('input, textarea, select, button, [contenteditable]')) {
+    event.preventDefault();
+    notify(openPolygonNotice);
+  }
   if (event.key === 'Escape') menu = '';
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); save(); }
 }}/>
 
-<div class="app-shell" class:light={$workspace.visual.theme === 'light'} style:--accent={$workspace.visual.appearance.accent} style:--base-size={$workspace.visual.appearance.fontSize + 'px'}>
+<div class="app-shell" class:light={$workspace.visual.theme === 'light'} style:--custom-accent={customAccent} style:--base-size={$workspace.visual.appearance.fontSize + 'px'}>
   <header class="topbar">
     <div class="identity"><span class="brand-mark"><Aperture size={24} strokeWidth={1.7}/></span><strong>Earth Detective</strong></div>
     <nav aria-label={$translate("Menú principal")}>
@@ -372,6 +392,12 @@
             {#each chartResolutions as [id, label]}<option value={id}>{$translate(label)}</option>{/each}
           </select>
         </label>
+        <label>{$translate('Frecuencia del gráfico')}
+          <select value={$workspace.visual.chartCadence ?? 'native'} onchange={event => editVisual(visual => visual.chartCadence = event.currentTarget.value)}>
+            {#each chartCadences as [id, label]}<option value={id}>{$translate(label)}</option>{/each}
+          </select>
+        </label>
+        <small>{$translate('Las series diarias se pueden agrupar. Se muestran solo semanas o meses completos y se conserva la frecuencia de las demás fuentes.')}</small>
       </div>
     {:else if modal === 'chart-export'}
       <form onsubmit={exportChart}>
@@ -390,7 +416,7 @@
         <label>{$translate('Idioma')}<select value={$workspace.visual.language} onchange={event => editVisual(visual => visual.language = event.currentTarget.value)}><option value="es">Español</option><option value="en">English</option></select></label>
         <label>{$translate("Tema")}<select value={$workspace.visual.theme} onchange={event => editVisual(visual => visual.theme = event.currentTarget.value)}><option value="dark">{$translate("Oscuro")}</option><option value="light">{$translate("Claro")}</option></select></label>
         <label>{$translate("Tamaño del texto")}<select value={$workspace.visual.appearance.fontSize} onchange={event => editVisual(visual => visual.appearance.fontSize = Number(event.currentTarget.value))}><option value="12">{$translate("Compacto")}</option><option value="13">{$translate("Normal")}</option><option value="15">{$translate("Grande")}</option></select></label>
-        <label>{$translate("Color de acento")}<input type="color" value={$workspace.visual.appearance.accent} oninput={event => editVisual(visual => visual.appearance.accent = event.currentTarget.value)}/></label>
+        <label>{$translate("Color de acento")}<input type="color" value={customAccent ?? ($workspace.visual.theme === 'light' ? '#2563eb' : '#38bdf8')} oninput={event => editVisual(visual => visual.appearance.accent = event.currentTarget.value)}/></label>
       </div>
     {/if}
   </dialog>

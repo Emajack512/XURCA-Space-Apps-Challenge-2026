@@ -61,9 +61,10 @@ function configureSource(item, points, newPoint, existing) {
   const entry = catalog.find(source => source.id === item.id);
   if (!entry) throw new Error('Una variable propuesta no está en el catálogo: ' + item.id);
   const config = sourceConfig(item.id);
+  if (config.access === 'noaa.cpc.oni') return config;
   const { upstream } = config;
   const compatible = geographicEntityRoutes.has(config.access)
-    ? points : points.filter(item => item.geometry.type === 'Point');
+    ? points : points.filter(item => (entry.route.geometry ?? ['Point']).includes(item.geometry.type));
   if (item.pointId && !compatible.some(point => point.id === item.pointId)) throw new Error('La selección indicada no existe.');
   const preferred = item.pointId || newPoint?.id || existing?.upstream.geometryId;
   const selection = compatible.find(item => item.id === preferred) ?? (compatible.length === 1 ? compatible[0] : null);
@@ -129,6 +130,10 @@ export async function configureWorkspace(snapshot, changes, invoke, language) {
     const [longitude, latitude] = newFeatures[0].geometry.coordinates;
     Object.assign(visual.map.camera, { longitude, latitude });
   }
+  if (newFeatures.length || changes.polygon) {
+    const scope = changes.polygon ? 'area' : 'point';
+    data.geography.scope = !data.geography.scope || data.geography.scope === scope ? scope : 'both';
+  }
   if (changes.sources || newFeatures.length) {
     const requests = changes.sources ?? [...new Set(data.sources.filter(catalogEntry).map(source => catalogEntry(source).id))].map(id => ({ id }));
     const configured = requests.flatMap(item => {
@@ -151,8 +156,10 @@ export async function configureWorkspace(snapshot, changes, invoke, language) {
     const cadences = await Promise.all(data.sources.map(async source => {
       const entry = catalogEntry(source);
       if (!entry) return null;
+      const geometry = selection.features.find(item => item.id === source.upstream.geometryId)?.geometry.type;
       const scope = source.access === 'noaa.ncei.station' ? 'station'
-        : entry.featureType === 'Reach' ? 'river' : entry.featureType === 'PriorLake' ? 'lake' : 'land';
+        : entry.featureType === 'Reach' ? 'river' : entry.featureType === 'PriorLake' ? 'lake'
+          : geometry && geometry !== 'Point' ? 'area' : 'land';
       const { matches } = await invoke('evaluate_coverage', { variable: entry.variable, scope, start: data.time.start, end: data.time.end });
       const match = matches.find(row => row.access === source.access && row.variables.includes(entry.code)
         && (!entry.featureType || row.selection === entry.featureType));
