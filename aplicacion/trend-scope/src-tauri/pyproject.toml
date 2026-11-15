@@ -34,3 +34,6 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages]
 find = { where = ["src-python"] }
+
+[tool.setuptools.package-data]
+"trend_scope.services" = ["source-coverage.json", "assistant-contract.json"]

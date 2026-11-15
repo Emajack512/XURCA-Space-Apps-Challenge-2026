@@ -1,5 +1,31 @@
 # Fuentes de datos de Earth Detective
 
+## Inventario de cobertura
+
+[source-coverage.json](../src-tauri/src-python/trend_scope/services/source-coverage.json) describe los 19 pares de variable y selección predefinidos en la interfaz, agrupados en siete productos o familias dentro de los cuatro conectores activos. Los límites por colección sirven para una evaluación previa. La disponibilidad efectiva depende del punto, la estación o la entidad solicitada.
+
+### Comprobaciones directas del 14 de noviembre de 2026
+
+| Ruta | Selección y período | Resultado |
+|---|---|---|
+| NASA POWER | Punto en San Luis, lon −66.34 y lat −33.30, enero de 2000 a diciembre de 2025 | 312 meses con valor en cada una de las seis variables predefinidas |
+| Open-Meteo ERA5 / ERA5-Land | Mismo punto, 1–3 de enero de 2000 y 29–31 de diciembre de 2025 | Tres días con valor por ventana en las ocho variables predefinidas. La solicitud del intervalo completo no devolvió una respuesta válida |
+| NOAA GSOM | Estación `ARM00087436`, enero de 2000 a diciembre de 2025 | Precipitación `PRCP` con 11 meses con valor, entre diciembre de 2002 y junio de 2005. Temperatura media `TAVG` sin valores en la ventana solicitada |
+| SWOT RiverSP D | Tramo `78340600051`, agosto de 2023 a diciembre de 2025 | 120 observaciones con altura de agua |
+| SWOT LakeSP D | Lago `6350036102`, agosto de 2023 a diciembre de 2025 | 80 observaciones con valor por variable, altura de agua y superficie |
+
+Las comprobaciones usaron los conectores Python de la app y conservaron solo conteos y metadatos. Los ejemplos de NOAA y SWOT corresponden a los identificadores indicados. Las pruebas de Open-Meteo en los extremos sustentan la disponibilidad en esos días, mientras que la continuidad completa queda por comprobar.
+
+### Muestreo geográfico de Argentina
+
+El [registro de muestras](../config/argentina-coverage-samples.json) usa un punto aproximado en cada una de las 23 provincias y en CABA, más tres puntos mar adentro frente al norte, centro y sur. Se pidió un mes de NASA POWER y un día de Open-Meteo. Cada resultado registra qué variables devolvieron un valor y, en Open-Meteo, la celda devuelta. Las muestras indican disponibilidad puntual en esas fechas.
+
+En los 24 puntos terrestres, NASA POWER devolvió seis variables, ERA5 devolvió dos y ERA5-Land devolvió seis. En los tres puntos marinos, POWER devolvió las cinco variables atmosféricas y de radiación y dejó sin valor la humedad radicular. ERA5 devolvió precipitación y ET₀ con ambas preferencias de celda. ERA5-Land dejó las seis variables sin valor en los tres puntos marinos.
+
+El conector de Open-Meteo usa `cell_selection=land`. El muestreo marino de ERA5 incluye una prueba separada con `cell_selection=sea`, disponible en el proveedor y pendiente de integrar en la app. ERA5-Land es un producto terrestre. Las variables de NASA POWER y ERA5 probadas en el mar describen condiciones atmosféricas o radiación, con la humedad radicular y la ET₀ sujetas a sus propias limitaciones de uso.
+
+NOAA GSOM requiere una estación con observaciones de la variable elegida. SWOT Hydrocron usa las colecciones de tramos fluviales y lagos. Su cobertura se evalúa por identificador y sigue pendiente un inventario nacional por entidad. Las variables oceanográficas, como temperatura superficial del mar y altura de ola, requieren productos marinos específicos.
+
 El inventario se basa en `Memoria/General/Recursos_Earth_System_Trend_Detective.txt`. Las rutas utilizables se registran en `trend_scope/services/catalog.py`. Cada ruta identifica un mecanismo de acceso. Una misma colección puede aparecer por varias rutas.
 
 ## Recursos del desafío

@@ -10,6 +10,8 @@ import json
 
 from .main import RegressionPayload, execute_regression as execute_regression_service
 from .services.acquisition import acquire
+from .services.assistant import AssistantQuestion, interpret
+from .services.coverage import CoverageRequest, coverage
 from .services.public_sources import find_places
 
 from .configuration import (
@@ -64,6 +66,19 @@ async def search_places(body: PlaceRequest) -> str:
 @commands.command()
 async def execute_regression(body: RegressionPayload) -> dict:
     return await to_thread.run_sync(execute_regression_service, body)
+
+
+@commands.command()
+async def evaluate_coverage(body: CoverageRequest) -> dict:
+    return {"matches": coverage(body)}
+
+
+@commands.command()
+async def interpret_question(body: AssistantQuestion) -> dict:
+    try:
+        return await to_thread.run_sync(interpret, body)
+    except ValueError as error:
+        raise InvokeException(str(error)) from error
 
 
 def main() -> int:

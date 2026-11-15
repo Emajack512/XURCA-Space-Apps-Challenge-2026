@@ -2,6 +2,14 @@ import { derived } from 'svelte/store';
 import { workspace } from '$lib/stores/workspace.js';
 
 const english = {
+  "Procesar": "Process",
+  "Gráficas": "Charts",
+  "Alternar gráficas": "Toggle charts",
+  "Asistente de IA": "AI assistant",
+  "Alternar asistente": "Toggle assistant",
+  "Vistas de la consulta": "Query views",
+  "Espacio de trabajo": "Workspace",
+  "Ancho del asistente": "Assistant width",
   "Alternar mapa": "Toggle map",
   "Sin variables disponibles": "No variables available",
   "Provincia (Argentina)": "Province (Argentina)",

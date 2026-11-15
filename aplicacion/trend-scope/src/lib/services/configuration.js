@@ -37,7 +37,16 @@ export async function loadWorkspace() {
     );
   }
   if (snapshot?.visual) {
-    if (snapshot.visual.workspace?.map === false) snapshot.visual.workspace.results = true;
+    const layout = snapshot.visual.workspace;
+    if (layout) {
+      if (layout.assistantVisible === undefined) {
+        layout.assistantVisible = true;
+        layout.assistantWidth = layout.resultsWidth ?? 388;
+      }
+      delete layout.results;
+      delete layout.resultsWidth;
+      delete layout.assistant;
+    }
     delete snapshot.visual.charts;
     delete snapshot.visual.expandedChart;
   }
