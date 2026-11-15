@@ -152,6 +152,42 @@ def area_mean(values, lats, mask) -> dict:
                          'partially covered cells count fully.']}
 
 
+FWI_STARTUP = {'ffmc': 85.0, 'dmc': 6.0, 'dc': 15.0}   # Van Wagner (1987) standard start-up values
+
+
+def grid_fwi(times, temperature, humidity, wind_kmh, precipitation, lats, mask, *, initial_state=None) -> dict:
+    """Canadian FWI system per in-mask cell from DAILY grids (fire/fwi.py, verified against xclim).
+
+    Cells with any missing day are skipped (the moisture codes carry memory: a gap cannot be bridged
+    without inventing weather). Each cell uses its own latitude for the day-length factors.
+    """
+    from ..fire.fwi import fire_weather_index
+    t, h, w, p = (np.asarray(a, dtype=float) for a in (temperature, humidity, wind_kmh, precipitation))
+    m = np.asarray(mask, dtype=bool)
+    if not (t.shape == h.shape == w.shape == p.shape) or t.shape[1:] != m.shape:
+        raise ValueError('The four daily grids must share the same (time, lat, lon) shape')
+    months = _months(times)
+    state = dict(initial_state or FWI_STARTUP)
+    fwi = np.full(t.shape, np.nan)
+    skipped = 0
+    for i in range(m.shape[0]):
+        for j in range(m.shape[1]):
+            if not m[i, j]:
+                continue
+            cell = [a[:, i, j] for a in (t, h, w, p)]
+            if not all(np.isfinite(c).all() for c in cell):
+                skipped += 1
+                continue
+            result = fire_weather_index(cell[0], np.clip(cell[1], 0, 100), cell[2], cell[3], months,
+                                        latitude=float(lats[i]), initial_state=state)
+            fwi[:, i, j] = result['fwi']
+    return {'fwi': fwi, 'n_skipped_cells': skipped, 'initial_state': state, 'uncertainty': 'not_estimated',
+            'warnings': ['FWI is defined with local-noon weather; daily mean temperature and humidity, daily '
+                         'maximum wind and 24 h precipitation are used as an approximation.',
+                         'Moisture codes start from standard start-up values: discard the first weeks (spin-up).',
+                         'Relative meteorological danger only: not ignition probability, location or burned area.']}
+
+
 def smooth_slices(values, mask, *, size: int = 3, boundary: str = 'reflect') -> dict:
     """Box smoothing (size x size, weights 1/size^2) of each time slice with `convolve2d`.
 

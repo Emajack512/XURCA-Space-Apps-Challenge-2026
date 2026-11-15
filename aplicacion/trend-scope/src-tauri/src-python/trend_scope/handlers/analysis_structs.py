@@ -495,6 +495,16 @@ GRID = (
         hypotheses=(), steps=(), charts=("map", "timeseries"), phase=4,
         description="Media ponderada por latitud de las celdas dentro del polígono, con su cobertura en cada paso.",
         limitations=("Con cobertura baja la media representa solo las celdas con dato.", *_GRID_LIMITS)),
+    AnalysisStruct(
+        struct_id="grid_fire_weather", title="Mapa de peligro meteorológico de incendio (FWI)", kind="mathematical",
+        targets=(1, 1), requirements=Requirements(),
+        params={"area_feature_id": _AREA},
+        hypotheses=(), steps=(), charts=("map",), phase=4,
+        description="Índice canadiense FWI por celda con temperatura, humedad, viento y lluvia diarios de ERA5 "
+                    "(los primeros 30 días se descartan como arranque). La variable elegida solo fija el área y el "
+                    "período: el análisis pide sus propias cuatro grillas.",
+        limitations=("Peligro meteorológico relativo: no es probabilidad de incendio ni superficie quemada.",
+                     "Aproxima los valores de mediodía con medias diarias.", *_GRID_LIMITS)),
 )
 STRUCTS = STRUCTS + GRID
 BY_ID = {item.struct_id: item for item in STRUCTS}

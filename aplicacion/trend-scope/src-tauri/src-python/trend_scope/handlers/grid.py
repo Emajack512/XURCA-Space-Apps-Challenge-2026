@@ -21,7 +21,7 @@ import numpy as np
 from ..models.spatial import grid as engine
 from .contracts import INVALID_REQUEST, METHOD_NOT_AVAILABLE, SOURCE_ERROR, HandlerError, error_item
 
-GRID_STRUCTS = {"grid_trend_map", "grid_anomaly_map", "grid_smoothing", "grid_area_summary"}
+GRID_STRUCTS = {"grid_trend_map", "grid_anomaly_map", "grid_smoothing", "grid_area_summary", "grid_fire_weather"}
 POLYGONS = {"Polygon", "MultiPolygon"}
 CADENCE_BY_ROUTE = {"nasa.power.monthly": "monthly", "openmeteo.archive.daily": "daily"}
 
@@ -220,6 +220,82 @@ def _area_summary(field, params) -> tuple:
     return [finding], layers, result["warnings"]
 
 
+FWI_VARIABLES = {"temperature": "temperature_2m_mean", "humidity": "relative_humidity_2m_mean",
+                 "wind": "wind_speed_10m_max", "precipitation": "precipitation_sum"}
+FWI_UNITS = {"temperature": {"C", "°C"}, "humidity": {"%"}, "wind": {"km/h"}, "precipitation": {"mm"}}
+FWI_SPINUP_DAYS = 30
+
+
+def _fetch_fwi_inputs(spec, params, sources, investigation) -> dict:
+    """The four daily grids of the FWI, same area and period; units checked, never converted here."""
+    scope = {"analysis_id": spec.id}
+    reason = connector_reason()
+    if reason:
+        raise HandlerError(METHOD_NOT_AVAILABLE, reason, scope)
+    from ..raster.contract import GridRequest
+    from ..raster.providers import fetch_grid
+    from ..services.environmental_series import area_bounds
+    area = _area(investigation, params.get("area_feature_id"), scope)
+    period = investigation.get("time") or {}
+    fields = {}
+    for role, variable_id in FWI_VARIABLES.items():
+        request = GridRequest(provider=_provider_for(variable_id, "daily", scope), variable_id=variable_id,
+                              start=period.get("start"), end=period.get("end"), cadence="daily",
+                              bbox=tuple(area_bounds(area["geometry"])), polygon=area["geometry"])
+        try:
+            request.validate()
+            field = fetch_grid(request).validate()
+        except ValueError as error:
+            raise HandlerError(SOURCE_ERROR, str(error), scope) from None
+        if field.unit not in FWI_UNITS[role]:
+            label = {"temperature": "la temperatura", "humidity": "la humedad", "wind": "el viento",
+                     "precipitation": "la lluvia"}[role]
+            raise HandlerError(INVALID_REQUEST, f"El FWI necesita {label} en {'/'.join(sorted(FWI_UNITS[role]))} y la "
+                               f"grilla trae {field.unit}: no se convierte en silencio.", scope)
+        fields[role] = field
+    first = fields["temperature"]
+    for role, field in fields.items():
+        if field.times != first.times or field.values.shape != first.values.shape:
+            raise HandlerError(INVALID_REQUEST, "Las cuatro grillas del FWI no comparten fechas ni celdas.", scope)
+    if len(first.times) <= FWI_SPINUP_DAYS + 30:
+        raise HandlerError(INVALID_REQUEST, f"El FWI necesita más de {FWI_SPINUP_DAYS + 30} días: los primeros "
+                           f"{FWI_SPINUP_DAYS} se descartan como arranque de los códigos de humedad.", scope)
+    return fields
+
+
+def _fire_weather(fields, params) -> tuple:
+    t = fields["temperature"]
+    result = engine.grid_fwi(t.times, t.values, fields["humidity"].values, fields["wind"].values,
+                             fields["precipitation"].values, t.lats, t.mask)
+    fwi = result["fwi"][FWI_SPINUP_DAYS:]
+    times = t.times[FWI_SPINUP_DAYS:]
+    last30 = fwi[-30:]
+    with np.errstate(invalid="ignore"):
+        mean_last30 = np.where(np.isfinite(last30).any(axis=0), np.nanmean(np.where(np.isfinite(last30), last30, np.nan), axis=0), np.nan)
+    finite_last = fwi[-1][np.isfinite(fwi[-1])]
+    how_much = {"unit": "1", "date": times[-1], "spinup_days": FWI_SPINUP_DAYS,
+                "last_day_median": float(np.median(finite_last)) if finite_last.size else None,
+                "last_day_max": float(finite_last.max()) if finite_last.size else None,
+                "last30_mean_max": float(np.nanmax(mean_last30)) if np.isfinite(mean_last30).any() else None,
+                "n_skipped_cells": result["n_skipped_cells"], "initial_state": result["initial_state"]}
+    fwi_field = t  # geometry and provenance of the temperature grid; the FWI is dimensionless
+    layers = [_layer(fwi_field, "fwi_last", f"FWI del {times[-1]}", "value", fwi[-1], start=times[-1], end=times[-1], unit="1"),
+              _layer(fwi_field, "fwi_mean30", f"FWI medio de los últimos 30 días hasta {times[-1]}", "value", mean_last30,
+                     start=times[-30], end=times[-1], unit="1")]
+    for layer in layers:
+        layer["variable"].update({"id": "fwi", "name": "Índice meteorológico de peligro de incendio (FWI, adimensional)"})
+        layer["provenance"]["urls"] = [u for f in fields.values() for u in f.urls]
+    finding = _finding("grid_fire_weather", fwi_field, how_much, n_cells=int(np.isfinite(fwi[-1]).sum()),
+                       notes=["Sistema canadiense FWI (Van Wagner 1987), verificado contra xclim; factores de duración "
+                              "del día según la latitud de cada celda."],
+                       limitations=["Es peligro meteorológico relativo: no es probabilidad de incendio, ni ubicación, "
+                                    "ni superficie quemada; no mostrar como porcentaje.",
+                                    "Usa medias diarias en lugar de valores de mediodía (aproximación).",
+                                    "Las clases de peligro (bajo, alto, extremo) no están calibradas para la región."])
+    finding["what"].update({"variable": "fwi", "name": "FWI", "unit": "1"})
+    return [finding], layers, result["warnings"]
+
+
 RUNNERS = {"grid_trend_map": _trend, "grid_anomaly_map": _anomaly, "grid_smoothing": _smoothing,
            "grid_area_summary": _area_summary}
 
@@ -232,8 +308,13 @@ def analyze(spec, resolved, sources: dict, investigation: dict) -> dict:
              "transformations": [], "steps": [], "findings": [], "verdict": None, "forecast": None,
              "charts": [{"kind": "map"}], "grids": [], "warnings": [], "errors": []}
     try:
-        field = _fetch(spec, resolved.params, sources, investigation)
-        findings, layers, warnings = RUNNERS[struct.struct_id](field, resolved.params)
+        if struct.struct_id == "grid_fire_weather":
+            fields = _fetch_fwi_inputs(spec, resolved.params, sources, investigation)
+            field = fields["temperature"]
+            findings, layers, warnings = _fire_weather(fields, resolved.params)
+        else:
+            field = _fetch(spec, resolved.params, sources, investigation)
+            findings, layers, warnings = RUNNERS[struct.struct_id](field, resolved.params)
     except HandlerError as error:
         block["errors"].append(error.to_dict())
         return block

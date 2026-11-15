@@ -234,6 +234,14 @@ const FINDINGS = {
         ...(last ? [`Último paso (${last.date}): ${fmt(last.value, 3)} ${unit(h.unit)}, cobertura ${fmt(last.coverage * 100, 3)} %`] : [])]
     };
   },
+  grid_fire_weather(finding) {
+    const h = finding.how_much;
+    return {
+      headline: `Peligro meteorológico de incendio (FWI) al ${h.date}`,
+      lines: [`FWI del día: mediana ${fmt(h.last_day_median, 3)}, máximo ${fmt(h.last_day_max, 3)} (índice relativo, sin unidad; no es una probabilidad)`,
+        `Máximo del promedio de los últimos 30 días: ${fmt(h.last30_mean_max, 3)} · ${h.spinup_days} días iniciales descartados como arranque`]
+    };
+  },
   spatial_pattern(finding) {
     const h = finding.how_much;
     return {
