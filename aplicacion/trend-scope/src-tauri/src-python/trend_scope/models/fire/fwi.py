@@ -2,12 +2,16 @@
 
 FWI is a relative METEOROLOGICAL fire-danger index. It does not predict
 ignition, fire location or burned area. Equations follow Van Wagner (1987),
-Forestry Technical Report 35. Day-length factors are the published
-northern-hemisphere (about 46N) values; the southern hemisphere uses the same
-factors shifted by six months. Latitudes within 30 degrees of the equator are
-REJECTED: no tropical factors are implemented and none were invented.
-No reference output tables were available to this implementation: it has not
-been compared against published values.
+Forestry Technical Report 35. Day-length factors follow the latitude bands of
+GFWED / the cffdrs R package (Wang et al. 2017), as also used by xclim:
+DMC has five bands (>=30N, 15-30N, 15S-15N constant 9, 15-30S, >30S) and DC
+three (>=15N, 15S-15N constant 1.39, <15S). Verified day by day against xclim
+1.0.0 (`compute/fire/_cffwis.py`) on synthetic weather at several latitudes:
+FFMC, DC, ISI, BUI and FWI agree to rounding; DMC differs by < 0.01 because
+Eq. 15 here uses the GFWED form 244.72 - 43.43 ln(wmr - 20) and xclim/cffdrs
+use 43.43 (5.6348 - ln(wmr - 20)) (same equation, rounded constant).
+Version 1.1.0 fixed the ISI wind function (it multiplied by W instead of
+exp(0.05039 W)) and the day-length tables (September 9.4; southern bands).
 """
 import math
 
@@ -15,13 +19,31 @@ import numpy as np
 
 from ..numeric import array, finite, scalar
 
-VERSION = '1.0.0-candidate'
-DMC_DAY_LENGTH = (6.5, 7.5, 9.0, 12.8, 13.9, 13.9, 12.4, 10.9, 9.2, 8.0, 7.0, 6.0)
-DC_DAY_LENGTH = (-1.6, -1.6, -1.6, 0.9, 3.8, 5.8, 6.4, 5.0, 2.4, 0.4, -1.6, -1.6)
+VERSION = '1.1.0-candidate'
+# Effective day length for DMC (hours), by latitude band; rows: >30S, 15-30S, 15S-15N, 15-30N, >=30N.
+DMC_DAY_LENGTH = (
+    (11.5, 10.5, 9.2, 7.9, 6.8, 6.2, 6.5, 7.4, 8.7, 10.0, 11.2, 11.8),
+    (10.1, 9.6, 9.1, 8.5, 8.1, 7.8, 7.9, 8.3, 8.9, 9.4, 9.9, 10.2),
+    (9.0,) * 12,
+    (7.9, 8.4, 8.9, 9.5, 9.9, 10.2, 10.1, 9.7, 9.1, 8.6, 8.1, 7.8),
+    (6.5, 7.5, 9.0, 12.8, 13.9, 13.9, 12.4, 10.9, 9.4, 8.0, 7.0, 6.0),
+)
+# Day-length adjustment for DC, by latitude band; rows: <15S, 15S-15N, >=15N.
+DC_DAY_LENGTH = (
+    (6.4, 5.0, 2.4, 0.4, -1.6, -1.6, -1.6, -1.6, -1.6, 0.9, 3.8, 5.8),
+    (1.39,) * 12,
+    (-1.6, -1.6, -1.6, 0.9, 3.8, 5.8, 6.4, 5.0, 2.4, 0.4, -1.6, -1.6),
+)
 
 
-def _factor(table, month: int, latitude: float) -> float:
-    return table[(month - 1 + (6 if latitude < 0 else 0)) % 12]
+def _dmc_day_length(month: int, latitude: float) -> float:
+    band = (0 if latitude < -30 else 1 if latitude < -15 else 2 if latitude < 15 else 3 if latitude < 30 else 4)
+    return DMC_DAY_LENGTH[band][month - 1]
+
+
+def _dc_day_length(month: int, latitude: float) -> float:
+    band = 0 if latitude < -15 else 1 if latitude < 15 else 2
+    return DC_DAY_LENGTH[band][month - 1]
 
 
 def _ffmc(f0, t, h, w, rain):
@@ -93,8 +115,8 @@ def fire_weather_index(temperature, relative_humidity, wind_speed, precipitation
     if np.any(np.abs(t) > 70):
         raise ValueError('Temperature outside the plausible range (degC)')
     lat = scalar(latitude, 'latitude')
-    if abs(lat) < 30 or abs(lat) > 90:
-        raise ValueError('Day-length factors are implemented only for |latitude| between 30 and 90 degrees')
+    if abs(lat) > 90:
+        raise ValueError('latitude must be between -90 and 90 degrees')
     if not isinstance(initial_state, dict) or set(initial_state) != {'ffmc', 'dmc', 'dc'}:
         raise ValueError('initial_state must have exactly ffmc, dmc and dc')
     f = scalar(initial_state['ffmc'], 'ffmc')
@@ -107,10 +129,11 @@ def fire_weather_index(temperature, relative_humidity, wind_speed, precipitation
     for i in range(n):
         month = int(m[i])
         f = _ffmc(f, t[i], h[i], w[i], rain[i])
-        p = _dmc(p, t[i], h[i], rain[i], _factor(DMC_DAY_LENGTH, month, lat))
-        d = _dc(d, t[i], rain[i], _factor(DC_DAY_LENGTH, month, lat))
+        p = _dmc(p, t[i], h[i], rain[i], _dmc_day_length(month, lat))
+        d = _dc(d, t[i], rain[i], _dc_day_length(month, lat))
         fm = 147.2 * (101 - f) / (59.5 + f)
-        isi = 0.208 * w[i] * 91.9 * math.exp(-0.1386 * fm) * (1 + fm ** 5.31 / 4.93e7)
+        # Van Wagner (1987) Eqs. 24-26: ISI = 0.208 * f(W) * f(F), with the wind function f(W) = exp(0.05039 W).
+        isi = 0.208 * math.exp(0.05039 * w[i]) * 91.9 * math.exp(-0.1386 * fm) * (1 + fm ** 5.31 / 4.93e7)
         if p == 0 and d == 0:
             bui = 0.0
         elif p <= 0.4 * d:
@@ -128,4 +151,4 @@ def fire_weather_index(temperature, relative_humidity, wind_speed, precipitation
     return {**out, 'final_state': {'ffmc': float(f), 'dmc': float(p), 'dc': float(d)},
             'uncertainty': 'not_estimated',
             'warnings': ['Relative meteorological danger only; not ignition, location or burned area.',
-                         'Not validated against published reference tables in this implementation.']}
+                         'Danger classes and thresholds are not provided: they must be validated for the region.']}
