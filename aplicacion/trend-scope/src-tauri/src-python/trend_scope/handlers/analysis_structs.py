@@ -30,6 +30,10 @@ class ParamSpec:
     provisional: bool = False
     description: str = ""
     required: bool = False        # no default: the research does not fix a value (models/AGENTS.md §3)
+    # Default that depends on the data or on another parameter, filled after preparation
+    # (analysis_handler.apply_dependent_defaults). depends_on: "@cadence" or a parameter name.
+    depends_on: Optional[str] = None
+    by_value: Mapping = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -98,6 +102,9 @@ def _common(**overrides) -> dict:
 _BASELINE = ParamSpec("period", None, description="Período de referencia {start, end}; por defecto 1991-2020 si la serie lo cubre")
 _ALPHA = ParamSpec("float", 0.05, 0.0001, 0.5, description="Nivel de significancia")
 _CONFIDENCE = ParamSpec("float", 0.95, 0.5, 0.999, description="Nivel del intervalo de confianza")
+# Values proposed on 2026-11-15 from standard practice because the research did not fix them
+# (decision D-03). They are provisional: the chemical engineer has not validated them.
+_PROPOSED = " Valor propuesto (práctica estándar), sin validar por la investigación (D-03)."
 
 STRUCTS: tuple = (
     AnalysisStruct(
@@ -234,11 +241,14 @@ STRUCTS: tuple = (
             gap_policy=ParamSpec("str", "longest_run", choices=("drop", "longest_run"),
                                  description="La detección exige períodos consecutivos"),
             baseline=_BASELINE,
-            penalty=ParamSpec("float", None, 1e-12, 1e12, required=True,
-                              description="Penalización de PELT, en unidades al cuadrado de la serie "
-                                          "(sin valor por defecto: la investigación no lo fija)"),
-            min_size=ParamSpec("int", 6, 2, 1000, provisional=True,
-                               description="Tamaño mínimo de cada segmento, en pasos (provisional)")),
+            penalty=ParamSpec("float", None, 1e-12, 1e12, provisional=True,
+                              description="Penalización de PELT, en unidades al cuadrado de la serie. Vacío: criterio SIC "
+                                          "(2·σ²·ln n, σ robusto de las diferencias; Killick et al. 2012)." + _PROPOSED),
+            min_size=ParamSpec("int", None, 2, 1000, provisional=True, depends_on="@cadence",
+                               by_value={"monthly": 12, "annual": 5},
+                               description="Tamaño mínimo de cada segmento, en pasos. Vacío: 12 meses o 5 años "
+                                           "(un régimen más corto suele ser variabilidad, no un cambio de nivel)."
+                                           + _PROPOSED)),
         hypotheses=("change_point",),
         steps=(
             Step("deseason", (Candidate("anomalies", "monthly_cycle",
@@ -246,8 +256,10 @@ STRUCTS: tuple = (
                                          "min_count": "$min_count", "kind": "absolute"},
                                         "Anomalías respecto del ciclo mensual de la base"),),
                  "Quitar el ciclo estacional", optional=True, produces="series"),
-            Step("segments", (Candidate("pelt", "always", {"penalty": "$penalty", "min_size": "$min_size"},
-                                        "PELT sobre la serie (costo cuadrático)"),),
+            Step("segments", (Candidate("pelt", "param:penalty=None", {"penalty": "sic", "min_size": "$min_size"},
+                                        "PELT sobre la serie (costo cuadrático), penalización SIC"),
+                              Candidate("pelt", "always", {"penalty": "$penalty", "min_size": "$min_size"},
+                                        "PELT sobre la serie (costo cuadrático), penalización indicada")),
                  "Detección de cambios"),
         ),
         charts=("change_points",),
@@ -262,8 +274,10 @@ STRUCTS: tuple = (
             gap_policy=ParamSpec("str", "longest_run", choices=("drop", "longest_run"),
                                  description="El suavizado exige pasos consecutivos"),
             method=ParamSpec("str", "moving_average", choices=("moving_average", "ssa"), description="Método de suavizado"),
-            window=ParamSpec("int", None, 2, 5000, required=True,
-                             description="Ventana en pasos de la serie (sin valor por defecto)"),
+            window=ParamSpec("int", None, 2, 5000, provisional=True, depends_on="@cadence",
+                             by_value={"daily": 31, "monthly": 12, "annual": 5},
+                             description="Ventana en pasos de la serie. Vacío: 31 días, 12 meses o 5 años según la cadencia."
+                                         + _PROPOSED),
             components=ParamSpec("int_list", [0], 0, 100, provisional=True,
                                  description="Componentes SVD que reconstruye SSA, base 0 (provisional)")),
         hypotheses=(),
@@ -286,12 +300,16 @@ STRUCTS: tuple = (
             gap_policy=ParamSpec("str", "longest_run", choices=("drop", "longest_run"),
                                  description="Los eventos exigen períodos consecutivos"),
             baseline=_BASELINE,
-            q=ParamSpec("float", None, 0.0001, 0.9999, required=True,
-                        description="Percentil del umbral, entre 0 y 1 (sin valor por defecto)"),
+            q=ParamSpec("float", None, 0.0001, 0.9999, provisional=True, depends_on="direction",
+                        by_value={"above": 0.9, "below": 0.1},
+                        description="Percentil del umbral, entre 0 y 1. Vacío: 0,9 por encima o 0,1 por debajo "
+                                    "(percentiles 90/10 de los índices ETCCDI)." + _PROPOSED),
             direction=ParamSpec("str", "above", choices=("above", "below"),
                                 description="above: valores por encima del umbral; below: por debajo"),
-            min_duration=ParamSpec("int", None, 1, 1000, required=True,
-                                   description="Duración mínima del evento, en pasos (sin valor por defecto)")),
+            min_duration=ParamSpec("int", None, 1, 1000, provisional=True, depends_on="@cadence",
+                                   by_value={"monthly": 1, "annual": 1},
+                                   description="Duración mínima del evento, en pasos. Vacío: 1 (un mes o un año extremo ya "
+                                               "es un evento; los consecutivos se unen)." + _PROPOSED)),
         hypotheses=("threshold",),
         steps=(Step("events", (Candidate(
             "detect_events", "always",
@@ -311,9 +329,11 @@ STRUCTS: tuple = (
             gap_policy=ParamSpec("str", "longest_run", choices=("drop", "longest_run"),
                                  description="La correlación con desfases exige períodos consecutivos"),
             baseline=_BASELINE, alpha=_ALPHA,
-            lags=ParamSpec("int_list", None, -60, 60, required=True,
+            lags=ParamSpec("int_list", None, -60, 60, provisional=True, depends_on="@cadence",
+                           by_value={"monthly": [0, 1, 2, 3, 6], "annual": [0, 1]},
                            description="Desfases a evaluar, en pasos (positivo: la primera variable antecede a la segunda). "
-                                       "Sin valor por defecto"),
+                                       "Vacío: 0, 1, 2, 3 y 6 meses, o 0 y 1 año (escalas típicas de respuesta "
+                                       "hidroclimática y de teleconexiones)." + _PROPOSED),
             deseasonalize=ParamSpec("bool", True, description="Quitar el ciclo mensual de cada serie antes de correlacionar")),
         hypotheses=("relationship",),
         steps=(

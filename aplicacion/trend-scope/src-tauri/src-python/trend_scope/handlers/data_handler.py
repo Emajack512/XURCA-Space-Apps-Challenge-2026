@@ -103,6 +103,8 @@ def _analyze_one(spec, resolved, series: Optional[dict], source: dict, source_er
         return block
     block["data_profile"] = prepared.profile
     block["transformations"] = prepared.transformations
+    block["warnings"].extend({"step": "parameters", "message": text} for text in
+                             analysis_handler.apply_dependent_defaults(struct, resolved.params, prepared.profile))
     issues = list(prepared.issues) + analysis_handler.check(struct, resolved.params, prepared.profile, scope)
     if issues:
         block["errors"].extend(issues)

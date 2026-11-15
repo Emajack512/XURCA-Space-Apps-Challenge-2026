@@ -147,10 +147,13 @@ const FINDINGS = {
   },
   change_point(finding) {
     const h = finding.how_much;
-    const lines = h.changes.map(c => `${c.date}: la media pasa de ${fmt(c.mean_before)} a ${fmt(c.mean_after)} ${unit(h.unit)} (cambio de ${fmt(c.shift)})`);
+    const what = h.basis === 'anomalies' ? 'la anomalía media' : 'la media';
+    const lines = h.changes.map(c => `${c.date}: ${what} pasa de ${fmt(c.mean_before, 3)} a ${fmt(c.mean_after, 3)} ${unit(h.unit)} (cambio de ${fmt(c.shift, 3)} ${unit(h.unit)})`);
+    const rule = h.penalty_rule === 'sic' ? 'criterio SIC' : 'indicada';
+    lines.push(`Penalización ${fmt(h.penalty, 3)} (${rule}) · tamaño mínimo de tramo ${h.min_size} pasos`);
     return {
       headline: h.n_changes ? `${h.n_changes} cambio(s) de régimen detectado(s)` : 'No se detectaron cambios con esta penalización (no hay evidencia suficiente; no significa que no los haya)',
-      lines: lines.length ? lines : [`Penalización ${fmt(h.penalty)} · tamaño mínimo de tramo ${h.min_size} pasos`]
+      lines
     };
   },
   smoothing(finding) {

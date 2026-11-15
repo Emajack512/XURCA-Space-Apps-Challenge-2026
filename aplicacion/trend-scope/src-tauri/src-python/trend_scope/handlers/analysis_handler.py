@@ -156,6 +156,25 @@ def resolve(spec: AnalysisSpec) -> ResolvedAnalysis:
     return ResolvedAnalysis(spec.id, struct, effective, hypothesis)
 
 
+def apply_dependent_defaults(struct: AnalysisStruct, params: dict, profile: dict) -> list:
+    """Fill empty parameters whose default depends on the cadence or on another parameter.
+
+    Mutates `params` (the effective parameters reported in the response) and returns
+    warning texts naming each value used, so a proposed default is never silent.
+    """
+    notes = []
+    for name, definition in struct.params.items():
+        if params.get(name) is not None or not definition.depends_on:
+            continue
+        key = profile.get("cadence") if definition.depends_on == "@cadence" else params.get(definition.depends_on)
+        if key not in definition.by_value:
+            continue
+        params[name] = _check_param(name, definition, definition.by_value[key])
+        label = f"cadencia {key}" if definition.depends_on == "@cadence" else f"{definition.depends_on}={key}"
+        notes.append(f"{name} = {params[name]} (valor propuesto para {label}, sin validar por la investigación: D-03).")
+    return notes
+
+
 def check(struct: AnalysisStruct, params: dict, profile: dict, scope: Optional[dict] = None) -> list:
     """Requirements of the struct against the prepared data. Returns error items (empty = fine)."""
     req = struct.requirements
@@ -200,7 +219,8 @@ def capabilities() -> dict:
             "targets": {"min": struct.targets[0], "max": struct.targets[1]},
             "params": {name: {"type": p.type, "default": p.default, "minimum": p.minimum, "maximum": p.maximum,
                               "choices": list(p.choices), "provisional": p.provisional, "required": p.required,
-                              "description": p.description}
+                              "description": p.description, "depends_on": p.depends_on,
+                              "by_value": dict(p.by_value)}
                        for name, p in struct.params.items()},
             "hypotheses": list(struct.hypotheses),
             "methods": sorted({c.method_id for step in struct.steps for c in step.candidates}),

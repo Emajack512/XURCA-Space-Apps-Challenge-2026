@@ -85,20 +85,42 @@ def wavelet(times, values, *, wavelet: str = 'db2', level: int = 1) -> dict:
             'warnings':['Boundary coefficients depend on symmetric extension; this is a discrete transform, not a forecast.']}
 
 
-def pelt(times, values, *, penalty: float, min_size: int = 2) -> dict:
+def pelt(times, values, *, penalty, min_size: int = 2) -> dict:
+    """PELT with l2 cost. `penalty` is a positive number (squared-value units) or 'sic'.
+
+    'sic': Schwarz information criterion for a change in mean with known variance
+    (Killick, Fearnhead & Eckley 2012; default of the R changepoint package):
+    penalty = 2 * sigma^2 * ln(n), with sigma estimated robustly from first differences,
+    sigma = 1.4826 * MAD(diff(y)) / sqrt(2), so the level shifts themselves do not inflate it.
+    """
     t,y = temporal(times,values,regular=True)
-    penalty = scalar(penalty,'penalty',True)
     size = integer(min_size,'min_size')
     if len(y) < size:
         raise ValueError('Series shorter than minimum segment')
     if np.max(abs(y)) > np.sqrt(np.finfo(float).max/len(y))/2:
         raise ValueError('Squared-error cost may overflow; rescale values and penalty explicitly')
+    warnings = ['Penalty has squared-value units; detections require calibration and may reflect sensor changes.']
+    rule = 'manual'
+    if isinstance(penalty, str):
+        if penalty != 'sic':
+            raise ValueError("penalty must be a positive number or 'sic'")
+        if len(y) < 3:
+            raise ValueError("SIC penalty needs at least 3 observations")
+        differences = np.diff(y)
+        sigma = 1.4826*np.median(np.abs(differences-np.median(differences)))/np.sqrt(2)
+        if not np.isfinite(sigma) or sigma <= 0:
+            raise ValueError('SIC penalty undefined: the series has no variability in its differences')
+        penalty, rule = 2*sigma**2*np.log(len(y)), 'sic'
+        warnings.append('SIC penalty assumes independent Gaussian noise around piecewise-constant means; '
+                        'autocorrelation makes it too small (more detections).')
+    else:
+        penalty = scalar(penalty,'penalty',True)
     # Ruptures l2 cost is segment sum of squared centered deviations.
     points = dependency('ruptures').Pelt(model='l2',min_size=size,jump=1).fit(y.reshape(-1,1)).predict(pen=penalty)
     indices = np.array(points[:-1],dtype=int)
     return {'change_indices':indices,'change_times':t[indices], 'segment_ends':np.array(points),
-            'penalty':penalty,'cost':'sum of within-segment squared deviations',
-            'warnings':['Penalty has squared-value units; detections require calibration and may reflect sensor changes.']}
+            'penalty':float(penalty),'penalty_rule':rule,'cost':'sum of within-segment squared deviations',
+            'warnings':warnings}
 
 
 def adwin(times, values, *, delta: float = .002) -> dict:

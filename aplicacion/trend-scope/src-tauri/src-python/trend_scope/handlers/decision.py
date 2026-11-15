@@ -418,7 +418,13 @@ def _change_point(ctx) -> dict:
                                   "No se pudieron detectar cambios.")],
                 "verdict": _verdict_change_point(ctx["hypothesis"], None), "charts": []}
     dates = prepared.meta["dates"]
-    values = prepared.dataset.variables["y"].values
+    deseason = _step(steps, "deseason")
+    # Segment means on the same series PELT segmented: with the seasonal cycle removed, a segment that
+    # covers more summers than winters does not fake a level shift.
+    if deseason is not None and isinstance(deseason.payload, dict) and deseason.payload.get("values") is not None:
+        values, basis = np.asarray(deseason.payload["values"], dtype=float), "anomalies"
+    else:
+        values, basis = prepared.dataset.variables["y"].values, "original"
     unit = prepared.meta["unit"]
     indices = [int(i) for i in np.asarray(segments_step.payload["change_indices"]).tolist()]
     bounds = [0] + indices + [len(values)]
@@ -426,15 +432,18 @@ def _change_point(ctx) -> dict:
                 for a, b in zip(bounds[:-1], bounds[1:])]
     changes = [{"date": dates[i], "index": i, "mean_before": segments[k]["mean"], "mean_after": segments[k + 1]["mean"],
                 "shift": segments[k + 1]["mean"] - segments[k]["mean"]} for k, i in enumerate(indices)]
-    notes = ["Aproximación con PELT (costo cuadrático); no es BFAST.",
-             "Las medias por tramo se calculan sobre la serie original, en su unidad."]
-    if _step(steps, "deseason") is None:
-        notes.append("La serie no se desestacionalizó antes de detectar cambios.")
+    notes = ["Aproximación con PELT (costo cuadrático); no es BFAST."]
+    if basis == "anomalies":
+        notes.append("Las medias por tramo son medias de las anomalías (sin ciclo estacional), en la unidad de la variable.")
+    else:
+        notes.append("La serie no se desestacionalizó: las medias por tramo son de la serie original y pueden reflejar "
+                     "la estación del año que cubre cada tramo.")
     finding = _finding(
         "change_point", ctx["series"], ctx["source"], prepared,
-        how_much={"n_changes": len(changes), "changes": changes, "segments": segments, "unit": unit,
-                  "penalty": ctx["params"]["penalty"], "min_size": ctx["params"]["min_size"],
-                  "deseasonalized": _step(steps, "deseason") is not None},
+        how_much={"n_changes": len(changes), "changes": changes, "segments": segments, "unit": unit, "basis": basis,
+                  "penalty": segments_step.payload.get("penalty", ctx["params"]["penalty"]),
+                  "penalty_rule": segments_step.payload.get("penalty_rule", "manual"),
+                  "min_size": ctx["params"]["min_size"], "deseasonalized": deseason is not None},
         conclusiveness="descriptive", statement_key="change_point.detected" if changes else "change_point.none_detected",
         test="pelt", notes=notes,
         limitations=["Detección por penalización: no es una prueba de significancia y depende de la penalización elegida.",
