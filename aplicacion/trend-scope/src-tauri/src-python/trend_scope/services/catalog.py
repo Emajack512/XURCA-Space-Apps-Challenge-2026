@@ -32,6 +32,41 @@ ROUTES = {
         "https://www.ncei.noaa.gov/support/access-data-service-api-user-documentation",
         "Public for the tested collection", selectors=("stationId",),
     ),
+    "noaa.ncei.daily": AccessRoute(
+        "NOAA NCEI Daily Summaries",
+        "https://www.ncei.noaa.gov/support/access-data-service-api-user-documentation",
+        "Public", selectors=("stationId",), product_required=False,
+    ),
+    "noaa.oisst.daily": AccessRoute(
+        "NOAA PSL OISST Daily",
+        "https://psl.noaa.gov/data/gridded/data.noaa.oisst.v2.highres.html",
+        "Public", geometry=("Point",), product_required=False,
+    ),
+    "noaa.cpc.oni": AccessRoute(
+        "NOAA CPC ONI",
+        "https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt",
+        "Public", product_required=False,
+    ),
+    "usgs.earthquakes": AccessRoute(
+        "USGS ComCat",
+        "https://earthquake.usgs.gov/fdsnws/event/1/",
+        "Public", geometry=("Polygon", "MultiPolygon"), product_required=False,
+    ),
+    "nasa.firms.area": AccessRoute(
+        "NASA FIRMS Area",
+        "https://firms.modaps.eosdis.nasa.gov/api/area/",
+        "FIRMS MAP_KEY", geometry=("Polygon", "MultiPolygon"),
+    ),
+    "argentina.ina.series": AccessRoute(
+        "INA Alerta5",
+        "https://alerta.ina.gov.ar/a5/swagger/index.html",
+        "Public for the tested series", product_required=False,
+    ),
+    "psmsl.rlr.monthly": AccessRoute(
+        "PSMSL RLR Monthly",
+        "https://psmsl.org/data/obtaining/notes.php",
+        "Public", product_required=False,
+    ),
     "noaa.cdo.station": AccessRoute(
         "NOAA Climate Data Online v2",
         "https://www.ncei.noaa.gov/cdo-web/webservices/v2",
@@ -41,7 +76,22 @@ ROUTES = {
         "NASA Earthdata / CMR",
         "https://cmr.earthdata.nasa.gov/search/site/docs/search/api.html",
         "Earthdata Login for protected downloads",
-        product_required=False, selectors=("collectionId",),
+        geometry=("Point", "Polygon", "MultiPolygon"),
+    ),
+    "copernicus.dataspace": AccessRoute(
+        "Copernicus Data Space OData",
+        "https://documentation.dataspace.copernicus.eu/APIs/OData.html",
+        "Access token for downloads", geometry=("Point", "Polygon", "MultiPolygon"),
+    ),
+    "copernicus.cds": AccessRoute(
+        "Copernicus Climate Data Store",
+        "https://cds.climate.copernicus.eu/how-to-api",
+        "CDS API key and dataset terms",
+    ),
+    "microsoft.planetary.stac": AccessRoute(
+        "Microsoft Planetary Computer STAC",
+        "https://planetarycomputer.microsoft.com/docs/concepts/sas/",
+        "Public catalog and temporary SAS", geometry=("Point", "Polygon", "MultiPolygon"),
     ),
     "nasa.swot.hydrocron": AccessRoute(
         "SWOT / Hydrocron",

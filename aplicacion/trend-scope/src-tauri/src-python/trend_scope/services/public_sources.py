@@ -5,7 +5,7 @@ import io
 import json
 import math
 import re
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import urlopen
@@ -39,26 +39,27 @@ def fetch_public_series(source, period):
     if start > end:
         raise ValueError("La fecha inicial debe ser anterior o igual a la final.")
 
-    if route == "noaa.ncei.station":
+    if route in {"noaa.ncei.station", "noaa.ncei.daily"}:
         provider = "NOAA NCEI"
         station = selectors.get("stationId", "").strip().upper()
-        units = {"PRCP": "mm", "TAVG": "°C"}
+        daily = route == "noaa.ncei.daily"
+        units = {"PRCP": "mm", "TAVG": "°C", "TMAX": "°C", "TMIN": "°C", "SNOW": "mm", "SNWD": "mm"}
         if not re.fullmatch(r"[A-Z0-9]{11}", station) or not re.fullmatch(r"[A-Z][A-Z0-9_]{0,79}", variable or ""):
             raise ValueError("Ingresá un ID de estación NOAA de 11 caracteres y una variable admitida.")
         rows, url = request_json(
             "https://www.ncei.noaa.gov/access/services/data/v1", provider,
-            dataset="global-summary-of-the-month", stations=station,
-            startDate=start.replace(day=1).isoformat(),
+            dataset="daily-summaries" if daily else "global-summary-of-the-month", stations=station,
+            startDate=(start if daily else start.replace(day=1)).isoformat(),
             endDate=end.isoformat(), dataTypes=variable, units="metric", format="json",
         )
-        by_month = {row["DATE"]: number(row.get(variable)) for row in rows}
-        points = [
-            {"month": key, "value": by_month.get(key)}
-            for year in range(start.year, end.year + 1)
-            for month in range(1, 13)
-            if (start.year, start.month) <= (year, month) <= (end.year, end.month)
-            for key in [f"{year:04d}-{month:02d}"]
-        ]
+        by_date = {row["DATE"]: number(row.get(variable)) for row in rows}
+        if daily:
+            dates = ((start + timedelta(days=offset)).isoformat() for offset in range((end - start).days + 1))
+        else:
+            dates = (f"{year:04d}-{month:02d}" for year in range(start.year, end.year + 1)
+                     for month in range(1, 13)
+                     if (start.year, start.month) <= (year, month) <= (end.year, end.month))
+        points = [{"month": key, "value": by_date.get(key)} for key in dates]
         location = f"Estación {station}"
     else:
         provider = "NASA SWOT / Hydrocron"
@@ -91,7 +92,7 @@ def fetch_public_series(source, period):
         "id": source["id"], "provider": provider, "variable": variable, "points": points,
         "unit": units.get(variable, "Unidad sin verificar"), "location": location, "url": url,
         "retrievedAt": datetime.now(timezone.utc).isoformat(),
-        "cadence": "overpass" if route == "nasa.swot.hydrocron" else "monthly",
+        "cadence": {"nasa.swot.hydrocron": "overpass", "noaa.ncei.daily": "daily"}.get(route, "monthly"),
     }
 
 
