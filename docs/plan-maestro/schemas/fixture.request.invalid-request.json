@@ -1,7 +1,7 @@
 {
   "schema": "earth-detective/request",
   "schema_version": 1,
-  "request_id": "fixture-missing-required",
+  "request_id": "fixture-invalid-request",
   "origin": "manual",
   "language": "es",
   "investigation": {
@@ -48,7 +48,7 @@
   "analyses": [
     {
       "id": "a1",
-      "struct": "smoothing",
+      "struct": "relationship",
       "targets": [
         "power-temperature"
       ]

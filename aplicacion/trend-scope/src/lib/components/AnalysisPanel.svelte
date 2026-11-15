@@ -157,7 +157,10 @@
                   </span>
                 {:else}
                   <input type={definition.type === 'int_list' ? 'text' : 'number'} step={definition.type === 'int' ? 1 : 'any'}
-                    placeholder={definition.default === null || definition.default === undefined ? '' : String(definition.default)}
+                    placeholder={definition.default !== null && definition.default !== undefined ? String(definition.default)
+                      : Object.keys(definition.by_value ?? {}).length
+                        ? 'automático: ' + Object.entries(definition.by_value).map(([key, value]) => `${value} (${key})`).join(' · ')
+                        : definition.required ? '' : 'automático'}
                     value={values[name] ?? ''} oninput={event => values[name] = event.currentTarget.value}/>
                 {/if}
                 <small>{definition.description}</small>

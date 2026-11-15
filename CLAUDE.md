@@ -51,7 +51,20 @@ Structs (13): `describe`, `trend_significance`, `anomaly`, `drought_spi`, `regre
 
 `spatial_pattern` agrupa los puntos con series idénticas (caen en la misma celda de la fuente; con POWER, 9 puntos en ~1° × 0,7° dan 4 series): tendencia y FDR una vez por serie distinta, `how_much.n_distinct_series` y `shared_by_points` en cada tendencia, más una limitación explícita. Antes contaba 9 series «significativas» y exageraba la evidencia.
 
-**Parámetros obligatorios sin valor por defecto** (`ParamSpec.required=True`, `INVALID_REQUEST` si faltan): `penalty` (change_point), `window` (smoothing), `q` y `min_duration` (extreme_events), `lags` (relationship). Provisionales: `harmonics` 2, `min_size` 6, `components` [0].
+**Ya no hay parámetros obligatorios** (etapa B, 2026-11-15). Valores **propuestos por Claude** a pedido del equipo (la ingeniera no los fijó; su documento `Trend_Detective_FRONTEND_MAPAS_v1` es de diseño de mapas): todos `provisional=True`, cada uno reportado como aviso «propuesto, sin validar (D-03)» y en `parameters_effective`:
+
+| Parámetro | Valor | Fuente |
+|---|---|---|
+| `penalty` (change_point) | vacío → SIC: 2·σ²·ln n, σ = 1,4826·MAD(diff y)/√2 (en `models/optional_methods.py::pelt`, `penalty='sic'`) | Killick et al. 2012; default de R `changepoint` |
+| `min_size` (change_point) | 12 meses / 5 años | un régimen más corto suele ser variabilidad |
+| `window` (smoothing) | 31 días / 12 meses / 5 años | práctica estándar |
+| `q` (extreme_events) | 0,9 si `direction=above`, 0,1 si `below` | percentiles ETCCDI |
+| `min_duration` (extreme_events) | 1 paso | un mes o año extremo ya es evento |
+| `lags` (relationship) | [0, 1, 2, 3, 6] meses / [0, 1] años | escalas de respuesta hidroclimática y teleconexiones |
+
+Mecanismo: `ParamSpec.depends_on` (`"@cadence"` o el nombre de otro parámetro) + `by_value`; `analysis_handler.apply_dependent_defaults` los completa en `data_handler._analyze_one` después de preparar la serie (cuando se conoce la cadencia). `list_analyses` expone `depends_on` y `by_value`; el formulario los muestra como «automático: …». Otros provisionales: `harmonics` 2, `components` [0].
+
+`change_point`: las medias por tramo se calculan sobre las anomalías (sin ciclo estacional) cuando el paso `deseason` corre (`how_much.basis`, `penalty_rule`). Con SIC, San Luis T2M 1991–2024 da un cambio (+0,68 °C, 2018). **Limitación conocida:** con series de ~25 años (2000–2024) SIC marca ~5 cambios que son años fríos/cálidos reales (2000, 2007): la autocorrelación hace la penalización demasiado chica (aviso incluido). Recomendar ≥ 30 años.
 
 ## Mapa de archivos (PY = `aplicacion/trend-scope/src-tauri/src-python/trend_scope/`)
 
@@ -79,7 +92,7 @@ Structs (13): `describe`, `trend_significance`, `anomaly`, `drought_spi`, `regre
 ## Decisiones (`docs/plan-maestro/21_RIESGOS_Y_DECISIONES.md`)
 
 - **D-06 decidida:** `statsmodels`, `pymannkendall`, `ruptures` en `pyproject.toml` (compilan en Windows y en el Linux de Eze).
-- **D-03 pendiente:** valores de los parámetros obligatorios y de los provisionales; los define la ingeniera química. Ejemplo del problema: `change_point` con `penalty` 10 sobre la serie mensual cruda marca 7 cortes porque pesa el ciclo estacional.
+- **D-03 resuelta provisionalmente:** valores propuestos desde la literatura (tabla arriba), marcados como no validados. Queda pendiente la validación de la ingeniera química; su documento de mapas no los cubre (menciona un «delta incremental v3 de backend» que no tenemos).
 - **D-21 pendiente:** tolerancias del pronóstico (orígenes, cobertura, habilidad); se fijan después de los primeros backtests reales.
 
 ## Pendientes y riesgos conocidos
@@ -93,7 +106,7 @@ Structs (13): `describe`, `trend_significance`, `anomaly`, `drought_spi`, `regre
 7. `fire/fwi.py`: rechaza |lat| < 30° y no se comparó con tablas de referencia.
 8. `models/tests/test_climatology.py` pasa (33 tests, `robust_z` coherente). Ningún test cuenta los métodos del registro. `services/test_assistant.py` no se corrió (es del asistente de JP).
 12. `drought_spi` con POWER a escala 1 da mínimos de −4,75 (meses secos con ceros): revisar en la auditoría el ajuste gamma con ceros.
-9. Desvíos de la fase 2: el paso `fdr` de `relationship` lo hace `decision.py` con `fdr_bh` (W06); `seasonality` informa coeficientes armónicos, amplitud espectral anual y rango STL; `change_point` calcula medias por tramo con NumPy (descriptivo); no hay `cusum`; `extreme_events` con hipótesis `threshold` compara un estadístico de la serie.
+9. Desvíos de la fase 2: el paso `fdr` de `relationship` lo hace `decision.py` con `fdr_bh` (W06); `seasonality` informa coeficientes armónicos, amplitud espectral anual y rango STL; `change_point` calcula medias por tramo con NumPy sobre las anomalías (descriptivo); no hay `cusum`; `extreme_events` con hipótesis `threshold` compara un estadístico de la serie.
 10. Desvíos respecto del plan 23: sin paso `lttb` en `describe`; `lag1_autocorrelation` acepta `groups`; código de error `CADENCE_INCOMPATIBLE`; el pronóstico es un único método registrado (`forecast_backtest`).
 11. Avisos de Git sobre LF/CRLF: inofensivos.
 
@@ -110,7 +123,7 @@ Orden pensado para no quedar bloqueados: primero lo que no depende de nadie (A),
    Listo cuando los tres den `completed` y el texto del panel se lea bien. Corregir errores sin rediseñar.
 3. **Tests desactualizados:** ajustar los conteos del registro en los tests de `models/` y revisar `tests/test_climatology.py` (no correr la suite completa, decisión del equipo; solo dejarlos coherentes).
 
-### Etapa B — Valores científicos (D-03), en paralelo a A
+### Etapa B — Valores científicos (D-03) — **HECHA con valores propuestos (2026-11-15)**: ver la tabla de parámetros arriba. Si la ingeniera valida o cambia algún valor, editar `by_value`/`default` en `analysis_structs.py` y quitar `provisional` y `_PROPOSED` de ese parámetro. Pasos originales:
 1. Armar una planilla para la ingeniera química con cada parámetro obligatorio y provisional: qué controla, valor actual, rango típico en la literatura y efecto observado (ej.: `penalty` 10 → 7 cortes en la serie mensual cruda).
 2. La ingeniera define valores por fenómeno o por cadencia. Registrar la decisión en `21_RIESGOS_Y_DECISIONES.md`.
 3. Cargar los valores en `PY/handlers/analysis_structs.py`: los obligatorios pasan a tener `default` (dejan de ser `required`), los confirmados pierden la marca `provisional`. Mismo cambio visible en el formulario (y en `analysisCatalog` del chat, que sale de `capabilities()`).
