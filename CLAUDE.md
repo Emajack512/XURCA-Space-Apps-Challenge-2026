@@ -94,9 +94,45 @@ Structs (13): `describe`, `trend_significance`, `anomaly`, `drought_spi`, `regre
 10. Desvíos respecto del plan 23: sin paso `lttb` en `describe`; `lag1_autocorrelation` acepta `groups`; código de error `CADENCE_INCOMPATIBLE`; el pronóstico es un único método registrado (`forecast_backtest`).
 11. Avisos de Git sobre LF/CRLF: inofensivos.
 
-## Cómo seguir
+## Flujo de trabajo para completar el motor de backend
 
-1. Arrancar la app (comando de arriba) y que el usuario pruebe el punto 1 de pendientes; corregir lo que falle sin rediseñar y sin tocar el asistente de JP salvo pedido.
-2. Pulir el formulario (punto 2).
-3. Con D-03 resuelta, cargar los valores por defecto en `analysis_structs.py`.
-4. Auditoría independiente. Respetar el protocolo de una función por solicitud de `models/AGENTS.md`.
+Orden pensado para no quedar bloqueados: primero lo que no depende de nadie (A), en paralelo se prepara la decisión científica (B), y lo grande o lo que depende de datos reales va después (C–F). Cada función nueva o cambiada sigue el protocolo de una función por solicitud de `PY/models/AGENTS.md`. Verificación: a mano (llamada a `data_handler.run` con un pedido real + prueba en la interfaz), sin suites automáticas.
+
+### Etapa A — Sin esperar decisiones (Ema + Claude)
+1. **Contratos:** correr `contracts.export_schemas()` y guardar los JSON Schema de request/response y un par de fixtures reales (el pedido de Villa Mercedes) en `docs/plan-maestro/schemas/`. Listo cuando el frontend y el chat puedan validar contra ellos.
+2. **Probar los 3 structs sin verificar**, uno por vez, con datos que los cubran:
+   - `drought_spi`: precipitación mensual de POWER o PMRA, ≥ 30 años (la base 1991–2020 lo pide).
+   - `precipitation_indices`: CHIRPS diario o ERA5 diario, años calendario completos (CHIRPS diario admite hasta 366 días: usar ERA5 si CHIRPS no responde).
+   - `spatial_pattern`: un polígono (provincia por nombre) con una fuente que acepte área.
+   Listo cuando los tres den `completed` y el texto del panel se lea bien. Corregir errores sin rediseñar.
+3. **Tests desactualizados:** ajustar los conteos del registro en los tests de `models/` y revisar `tests/test_climatology.py` (no correr la suite completa, decisión del equipo; solo dejarlos coherentes).
+
+### Etapa B — Valores científicos (D-03), en paralelo a A
+1. Armar una planilla para la ingeniera química con cada parámetro obligatorio y provisional: qué controla, valor actual, rango típico en la literatura y efecto observado (ej.: `penalty` 10 → 7 cortes en la serie mensual cruda).
+2. La ingeniera define valores por fenómeno o por cadencia. Registrar la decisión en `21_RIESGOS_Y_DECISIONES.md`.
+3. Cargar los valores en `PY/handlers/analysis_structs.py`: los obligatorios pasan a tener `default` (dejan de ser `required`), los confirmados pierden la marca `provisional`. Mismo cambio visible en el formulario (y en `analysisCatalog` del chat, que sale de `capabilities()`).
+4. Decidir junto con esto si `change_point` corre sobre anomalías (sin ciclo estacional) en vez de la serie cruda. Si sí: agregar el paso de desestacionalización al struct (método ya existente, sin fórmulas en el handler).
+Listo cuando ningún análisis exija un número que el usuario no sabe elegir.
+
+### Etapa C — Tolerancias del pronóstico (D-21), después de B
+1. Correr `forecast` sobre 5–10 series reales (temperatura y precipitación, varias cadencias) y anotar habilidad, cobertura empírica y horizonte validado de cada una.
+2. Con esos números, el equipo fija orígenes de backtest, tolerancia de cobertura y umbral de habilidad (piso: habilidad > 0, T11). Cargarlos en `analysis_handler.py`/`forecast_backtest`.
+Listo cuando `validated_forecast` tenga criterios documentados y no provisionales.
+
+### Etapa D — Datos espaciales (decisión de alcance primero)
+1. **Decidir** si la versión de la hackatón incluye análisis sobre mapas. Si no: documentarlo como fuera de alcance y saltar a E.
+2. Si sí: conector de ráster (rasterio ya es dependencia) que entregue una grilla recortada al polígono, empezando por una fuente que ya se descarga en ráster (CHIRPS mensual).
+3. Registrar en `catalog_registry.py` y crear structs, una función por vez: convolución 2D / FIR 2D (`signal/convolution2d.py`) primero, después W11, W12, W14, W15, W16, W19 según qué datos entregue el conector. `fire/fwi.py` necesita varias variables diarias (temperatura, humedad, viento, lluvia): requiere un pedido multivariable de ERA5.
+Listo cuando cada struct nuevo dé `completed` con datos reales.
+
+### Etapa E — Pasos faltantes del plan 23 (solo con respaldo)
+- `lttb` en `describe` para reducir series largas en vez de omitirlas.
+- `cusum` en `change_point`: solo si B fija baseline, allowance y threshold.
+- Registrar `event_composite` y `percentile_thresholds` (W04) si algún struct los necesita.
+
+### Etapa F — Validación
+1. **Auditoría independiente** (alguien distinto del autor) de W01–W03 y de todo lo nuevo, con referencia externa por método. Cambiar el estado de `candidate` solo con esa firma (D-08).
+2. `fire/fwi.py`: comparar con las tablas de referencia del FWI canadiense y revisar el rechazo de |lat| < 30°.
+
+### Regla general
+Ante cualquier error al probar: corregir el módulo afectado sin rediseñar y sin tocar el asistente de JP salvo pedido. Antes de cada etapa, arrancar la app con el comando de arriba.
