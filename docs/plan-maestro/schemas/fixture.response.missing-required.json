@@ -1,0 +1,34 @@
+{
+  "schema": "earth-detective/response",
+  "schema_version": 1,
+  "request_id": "fixture-missing-required",
+  "request_hash": "sha256:a101e4137dee5f65a7d1555c74333ffede03f181c7854d3839a60ff4f0512000",
+  "status": "failed",
+  "generated_at": "2026-11-15T20:17:06.613506+00:00",
+  "engine": {
+    "handler_version": "1.0.0",
+    "methods": {}
+  },
+  "series": [],
+  "analyses": [],
+  "warnings": [],
+  "errors": [
+    {
+      "code": "INVALID_REQUEST",
+      "message": "Falta el parámetro obligatorio window: la investigación científica no fija un valor por defecto, hay que indicarlo explícitamente.",
+      "scope": {
+        "analysis_id": "a1"
+      }
+    }
+  ],
+  "assistant_digest": {
+    "request_hash": "sha256:a101e4137dee5f65a7d1555c74333ffede03f181c7854d3839a60ff4f0512000",
+    "status": "failed",
+    "analyses": [],
+    "sources": [],
+    "errors": [
+      "Falta el parámetro obligatorio window: la investigación científica no fija un valor por defecto, hay que indicarlo explícitamente."
+    ],
+    "truncated": false
+  }
+}

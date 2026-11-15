@@ -1,0 +1,1771 @@
+{
+  "schema": "earth-detective/response",
+  "schema_version": 1,
+  "request_id": "fixture-trend-villa-mercedes",
+  "request_hash": "sha256:d6309b299e9e2a1d238866db9fecf9d0f735f9069334e25781245ecf64725116",
+  "status": "completed",
+  "generated_at": "2026-11-15T20:17:06.601435+00:00",
+  "engine": {
+    "handler_version": "1.0.0",
+    "methods": {
+      "anomalies": "1.0.0-candidate",
+      "sen_interval": "1.0.0-candidate",
+      "seasonal_mann_kendall": "1.0.0-candidate",
+      "modified_mann_kendall": "1.0.0-candidate"
+    }
+  },
+  "series": [
+    {
+      "id": "power-temperature",
+      "variable": "T2M",
+      "unit": "C",
+      "points": [
+        {
+          "month": "2000-01",
+          "value": 23.03
+        },
+        {
+          "month": "2000-02",
+          "value": 21.61
+        },
+        {
+          "month": "2000-03",
+          "value": 18.32
+        },
+        {
+          "month": "2000-04",
+          "value": 16.5
+        },
+        {
+          "month": "2000-05",
+          "value": 10.54
+        },
+        {
+          "month": "2000-06",
+          "value": 8.62
+        },
+        {
+          "month": "2000-07",
+          "value": 5.41
+        },
+        {
+          "month": "2000-08",
+          "value": 8.91
+        },
+        {
+          "month": "2000-09",
+          "value": 12.58
+        },
+        {
+          "month": "2000-10",
+          "value": 17.35
+        },
+        {
+          "month": "2000-11",
+          "value": 18.27
+        },
+        {
+          "month": "2000-12",
+          "value": 23.06
+        },
+        {
+          "month": "2001-01",
+          "value": 24.45
+        },
+        {
+          "month": "2001-02",
+          "value": 25.85
+        },
+        {
+          "month": "2001-03",
+          "value": 20.91
+        },
+        {
+          "month": "2001-04",
+          "value": 14.9
+        },
+        {
+          "month": "2001-05",
+          "value": 10.98
+        },
+        {
+          "month": "2001-06",
+          "value": 8.88
+        },
+        {
+          "month": "2001-07",
+          "value": 8.16
+        },
+        {
+          "month": "2001-08",
+          "value": 11.59
+        },
+        {
+          "month": "2001-09",
+          "value": 12.29
+        },
+        {
+          "month": "2001-10",
+          "value": 16.86
+        },
+        {
+          "month": "2001-11",
+          "value": 18.9
+        },
+        {
+          "month": "2001-12",
+          "value": 23.36
+        },
+        {
+          "month": "2002-01",
+          "value": 22.74
+        },
+        {
+          "month": "2002-02",
+          "value": 21.84
+        },
+        {
+          "month": "2002-03",
+          "value": 20.86
+        },
+        {
+          "month": "2002-04",
+          "value": 15.26
+        },
+        {
+          "month": "2002-05",
+          "value": 13.38
+        },
+        {
+          "month": "2002-06",
+          "value": 7.13
+        },
+        {
+          "month": "2002-07",
+          "value": 8.38
+        },
+        {
+          "month": "2002-08",
+          "value": 11.18
+        },
+        {
+          "month": "2002-09",
+          "value": 13.92
+        },
+        {
+          "month": "2002-10",
+          "value": 18.55
+        },
+        {
+          "month": "2002-11",
+          "value": 20.74
+        },
+        {
+          "month": "2002-12",
+          "value": 21.62
+        },
+        {
+          "month": "2003-01",
+          "value": 24.08
+        },
+        {
+          "month": "2003-02",
+          "value": 22.51
+        },
+        {
+          "month": "2003-03",
+          "value": 20.93
+        },
+        {
+          "month": "2003-04",
+          "value": 15.91
+        },
+        {
+          "month": "2003-05",
+          "value": 12.31
+        },
+        {
+          "month": "2003-06",
+          "value": 11.47
+        },
+        {
+          "month": "2003-07",
+          "value": 7.82
+        },
+        {
+          "month": "2003-08",
+          "value": 8.93
+        },
+        {
+          "month": "2003-09",
+          "value": 14.16
+        },
+        {
+          "month": "2003-10",
+          "value": 19.91
+        },
+        {
+          "month": "2003-11",
+          "value": 23.11
+        },
+        {
+          "month": "2003-12",
+          "value": 21.66
+        },
+        {
+          "month": "2004-01",
+          "value": 26.69
+        },
+        {
+          "month": "2004-02",
+          "value": 22.08
+        },
+        {
+          "month": "2004-03",
+          "value": 21.61
+        },
+        {
+          "month": "2004-04",
+          "value": 16.61
+        },
+        {
+          "month": "2004-05",
+          "value": 9.02
+        },
+        {
+          "month": "2004-06",
+          "value": 9.33
+        },
+        {
+          "month": "2004-07",
+          "value": 8.01
+        },
+        {
+          "month": "2004-08",
+          "value": 10.15
+        },
+        {
+          "month": "2004-09",
+          "value": 13.85
+        },
+        {
+          "month": "2004-10",
+          "value": 17.12
+        },
+        {
+          "month": "2004-11",
+          "value": 20.19
+        },
+        {
+          "month": "2004-12",
+          "value": 22.84
+        },
+        {
+          "month": "2005-01",
+          "value": 23.17
+        },
+        {
+          "month": "2005-02",
+          "value": 23.05
+        },
+        {
+          "month": "2005-03",
+          "value": 20.16
+        },
+        {
+          "month": "2005-04",
+          "value": 14.35
+        },
+        {
+          "month": "2005-05",
+          "value": 11.77
+        },
+        {
+          "month": "2005-06",
+          "value": 10.0
+        },
+        {
+          "month": "2005-07",
+          "value": 8.46
+        },
+        {
+          "month": "2005-08",
+          "value": 10.27
+        },
+        {
+          "month": "2005-09",
+          "value": 12.23
+        },
+        {
+          "month": "2005-10",
+          "value": 16.99
+        },
+        {
+          "month": "2005-11",
+          "value": 22.14
+        },
+        {
+          "month": "2005-12",
+          "value": 23.21
+        },
+        {
+          "month": "2006-01",
+          "value": 25.07
+        },
+        {
+          "month": "2006-02",
+          "value": 22.92
+        },
+        {
+          "month": "2006-03",
+          "value": 19.54
+        },
+        {
+          "month": "2006-04",
+          "value": 16.52
+        },
+        {
+          "month": "2006-05",
+          "value": 11.29
+        },
+        {
+          "month": "2006-06",
+          "value": 10.36
+        },
+        {
+          "month": "2006-07",
+          "value": 10.9
+        },
+        {
+          "month": "2006-08",
+          "value": 10.77
+        },
+        {
+          "month": "2006-09",
+          "value": 14.35
+        },
+        {
+          "month": "2006-10",
+          "value": 19.38
+        },
+        {
+          "month": "2006-11",
+          "value": 20.01
+        },
+        {
+          "month": "2006-12",
+          "value": 23.04
+        },
+        {
+          "month": "2007-01",
+          "value": 22.48
+        },
+        {
+          "month": "2007-02",
+          "value": 21.78
+        },
+        {
+          "month": "2007-03",
+          "value": 19.28
+        },
+        {
+          "month": "2007-04",
+          "value": 15.63
+        },
+        {
+          "month": "2007-05",
+          "value": 8.69
+        },
+        {
+          "month": "2007-06",
+          "value": 6.93
+        },
+        {
+          "month": "2007-07",
+          "value": 5.87
+        },
+        {
+          "month": "2007-08",
+          "value": 5.75
+        },
+        {
+          "month": "2007-09",
+          "value": 13.14
+        },
+        {
+          "month": "2007-10",
+          "value": 16.87
+        },
+        {
+          "month": "2007-11",
+          "value": 19.61
+        },
+        {
+          "month": "2007-12",
+          "value": 22.55
+        },
+        {
+          "month": "2008-01",
+          "value": 22.72
+        },
+        {
+          "month": "2008-02",
+          "value": 21.8
+        },
+        {
+          "month": "2008-03",
+          "value": 19.16
+        },
+        {
+          "month": "2008-04",
+          "value": 15.07
+        },
+        {
+          "month": "2008-05",
+          "value": 11.84
+        },
+        {
+          "month": "2008-06",
+          "value": 7.21
+        },
+        {
+          "month": "2008-07",
+          "value": 10.38
+        },
+        {
+          "month": "2008-08",
+          "value": 10.11
+        },
+        {
+          "month": "2008-09",
+          "value": 12.93
+        },
+        {
+          "month": "2008-10",
+          "value": 16.74
+        },
+        {
+          "month": "2008-11",
+          "value": 22.39
+        },
+        {
+          "month": "2008-12",
+          "value": 22.36
+        },
+        {
+          "month": "2009-01",
+          "value": 22.18
+        },
+        {
+          "month": "2009-02",
+          "value": 21.91
+        },
+        {
+          "month": "2009-03",
+          "value": 21.9
+        },
+        {
+          "month": "2009-04",
+          "value": 19.44
+        },
+        {
+          "month": "2009-05",
+          "value": 13.52
+        },
+        {
+          "month": "2009-06",
+          "value": 9.14
+        },
+        {
+          "month": "2009-07",
+          "value": 7.26
+        },
+        {
+          "month": "2009-08",
+          "value": 13.27
+        },
+        {
+          "month": "2009-09",
+          "value": 11.35
+        },
+        {
+          "month": "2009-10",
+          "value": 18.47
+        },
+        {
+          "month": "2009-11",
+          "value": 21.3
+        },
+        {
+          "month": "2009-12",
+          "value": 21.92
+        },
+        {
+          "month": "2010-01",
+          "value": 25.09
+        },
+        {
+          "month": "2010-02",
+          "value": 22.98
+        },
+        {
+          "month": "2010-03",
+          "value": 21.55
+        },
+        {
+          "month": "2010-04",
+          "value": 14.74
+        },
+        {
+          "month": "2010-05",
+          "value": 11.29
+        },
+        {
+          "month": "2010-06",
+          "value": 8.97
+        },
+        {
+          "month": "2010-07",
+          "value": 6.05
+        },
+        {
+          "month": "2010-08",
+          "value": 8.68
+        },
+        {
+          "month": "2010-09",
+          "value": 13.04
+        },
+        {
+          "month": "2010-10",
+          "value": 16.11
+        },
+        {
+          "month": "2010-11",
+          "value": 19.62
+        },
+        {
+          "month": "2010-12",
+          "value": 23.01
+        },
+        {
+          "month": "2011-01",
+          "value": 23.96
+        },
+        {
+          "month": "2011-02",
+          "value": 21.58
+        },
+        {
+          "month": "2011-03",
+          "value": 19.41
+        },
+        {
+          "month": "2011-04",
+          "value": 15.98
+        },
+        {
+          "month": "2011-05",
+          "value": 11.74
+        },
+        {
+          "month": "2011-06",
+          "value": 7.86
+        },
+        {
+          "month": "2011-07",
+          "value": 7.34
+        },
+        {
+          "month": "2011-08",
+          "value": 9.2
+        },
+        {
+          "month": "2011-09",
+          "value": 15.43
+        },
+        {
+          "month": "2011-10",
+          "value": 16.68
+        },
+        {
+          "month": "2011-11",
+          "value": 21.66
+        },
+        {
+          "month": "2011-12",
+          "value": 24.08
+        },
+        {
+          "month": "2012-01",
+          "value": 26.19
+        },
+        {
+          "month": "2012-02",
+          "value": 23.37
+        },
+        {
+          "month": "2012-03",
+          "value": 21.13
+        },
+        {
+          "month": "2012-04",
+          "value": 15.79
+        },
+        {
+          "month": "2012-05",
+          "value": 13.48
+        },
+        {
+          "month": "2012-06",
+          "value": 8.96
+        },
+        {
+          "month": "2012-07",
+          "value": 6.74
+        },
+        {
+          "month": "2012-08",
+          "value": 9.99
+        },
+        {
+          "month": "2012-09",
+          "value": 13.68
+        },
+        {
+          "month": "2012-10",
+          "value": 15.73
+        },
+        {
+          "month": "2012-11",
+          "value": 20.29
+        },
+        {
+          "month": "2012-12",
+          "value": 21.99
+        },
+        {
+          "month": "2013-01",
+          "value": 24.02
+        },
+        {
+          "month": "2013-02",
+          "value": 22.62
+        },
+        {
+          "month": "2013-03",
+          "value": 18.71
+        },
+        {
+          "month": "2013-04",
+          "value": 16.74
+        },
+        {
+          "month": "2013-05",
+          "value": 12.29
+        },
+        {
+          "month": "2013-06",
+          "value": 10.19
+        },
+        {
+          "month": "2013-07",
+          "value": 8.38
+        },
+        {
+          "month": "2013-08",
+          "value": 10.09
+        },
+        {
+          "month": "2013-09",
+          "value": 11.66
+        },
+        {
+          "month": "2013-10",
+          "value": 18.69
+        },
+        {
+          "month": "2013-11",
+          "value": 20.2
+        },
+        {
+          "month": "2013-12",
+          "value": 25.31
+        },
+        {
+          "month": "2014-01",
+          "value": 24.88
+        },
+        {
+          "month": "2014-02",
+          "value": 20.72
+        },
+        {
+          "month": "2014-03",
+          "value": 18.36
+        },
+        {
+          "month": "2014-04",
+          "value": 15.22
+        },
+        {
+          "month": "2014-05",
+          "value": 12.43
+        },
+        {
+          "month": "2014-06",
+          "value": 8.56
+        },
+        {
+          "month": "2014-07",
+          "value": 8.87
+        },
+        {
+          "month": "2014-08",
+          "value": 12.06
+        },
+        {
+          "month": "2014-09",
+          "value": 14.68
+        },
+        {
+          "month": "2014-10",
+          "value": 19.67
+        },
+        {
+          "month": "2014-11",
+          "value": 20.18
+        },
+        {
+          "month": "2014-12",
+          "value": 22.72
+        },
+        {
+          "month": "2015-01",
+          "value": 24.18
+        },
+        {
+          "month": "2015-02",
+          "value": 21.36
+        },
+        {
+          "month": "2015-03",
+          "value": 20.7
+        },
+        {
+          "month": "2015-04",
+          "value": 17.51
+        },
+        {
+          "month": "2015-05",
+          "value": 13.17
+        },
+        {
+          "month": "2015-06",
+          "value": 9.99
+        },
+        {
+          "month": "2015-07",
+          "value": 8.61
+        },
+        {
+          "month": "2015-08",
+          "value": 11.3
+        },
+        {
+          "month": "2015-09",
+          "value": 12.15
+        },
+        {
+          "month": "2015-10",
+          "value": 13.47
+        },
+        {
+          "month": "2015-11",
+          "value": 18.03
+        },
+        {
+          "month": "2015-12",
+          "value": 22.08
+        },
+        {
+          "month": "2016-01",
+          "value": 23.14
+        },
+        {
+          "month": "2016-02",
+          "value": 23.58
+        },
+        {
+          "month": "2016-03",
+          "value": 19.61
+        },
+        {
+          "month": "2016-04",
+          "value": 13.46
+        },
+        {
+          "month": "2016-05",
+          "value": 10.59
+        },
+        {
+          "month": "2016-06",
+          "value": 6.55
+        },
+        {
+          "month": "2016-07",
+          "value": 7.6
+        },
+        {
+          "month": "2016-08",
+          "value": 11.4
+        },
+        {
+          "month": "2016-09",
+          "value": 13.4
+        },
+        {
+          "month": "2016-10",
+          "value": 16.27
+        },
+        {
+          "month": "2016-11",
+          "value": 19.28
+        },
+        {
+          "month": "2016-12",
+          "value": 22.89
+        },
+        {
+          "month": "2017-01",
+          "value": 24.5
+        },
+        {
+          "month": "2017-02",
+          "value": 23.89
+        },
+        {
+          "month": "2017-03",
+          "value": 20.3
+        },
+        {
+          "month": "2017-04",
+          "value": 14.92
+        },
+        {
+          "month": "2017-05",
+          "value": 11.46
+        },
+        {
+          "month": "2017-06",
+          "value": 9.09
+        },
+        {
+          "month": "2017-07",
+          "value": 8.98
+        },
+        {
+          "month": "2017-08",
+          "value": 11.09
+        },
+        {
+          "month": "2017-09",
+          "value": 12.58
+        },
+        {
+          "month": "2017-10",
+          "value": 16.12
+        },
+        {
+          "month": "2017-11",
+          "value": 19.9
+        },
+        {
+          "month": "2017-12",
+          "value": 23.4
+        },
+        {
+          "month": "2018-01",
+          "value": 23.8
+        },
+        {
+          "month": "2018-02",
+          "value": 24.02
+        },
+        {
+          "month": "2018-03",
+          "value": 20.54
+        },
+        {
+          "month": "2018-04",
+          "value": 19.0
+        },
+        {
+          "month": "2018-05",
+          "value": 13.17
+        },
+        {
+          "month": "2018-06",
+          "value": 7.58
+        },
+        {
+          "month": "2018-07",
+          "value": 6.19
+        },
+        {
+          "month": "2018-08",
+          "value": 10.16
+        },
+        {
+          "month": "2018-09",
+          "value": 16.23
+        },
+        {
+          "month": "2018-10",
+          "value": 17.43
+        },
+        {
+          "month": "2018-11",
+          "value": 20.49
+        },
+        {
+          "month": "2018-12",
+          "value": 22.94
+        },
+        {
+          "month": "2019-01",
+          "value": 23.95
+        },
+        {
+          "month": "2019-02",
+          "value": 23.74
+        },
+        {
+          "month": "2019-03",
+          "value": 18.78
+        },
+        {
+          "month": "2019-04",
+          "value": 16.74
+        },
+        {
+          "month": "2019-05",
+          "value": 12.22
+        },
+        {
+          "month": "2019-06",
+          "value": 8.69
+        },
+        {
+          "month": "2019-07",
+          "value": 8.31
+        },
+        {
+          "month": "2019-08",
+          "value": 10.39
+        },
+        {
+          "month": "2019-09",
+          "value": 13.5
+        },
+        {
+          "month": "2019-10",
+          "value": 16.91
+        },
+        {
+          "month": "2019-11",
+          "value": 22.69
+        },
+        {
+          "month": "2019-12",
+          "value": 24.01
+        },
+        {
+          "month": "2020-01",
+          "value": 25.49
+        },
+        {
+          "month": "2020-02",
+          "value": 23.48
+        },
+        {
+          "month": "2020-03",
+          "value": 23.79
+        },
+        {
+          "month": "2020-04",
+          "value": 17.32
+        },
+        {
+          "month": "2020-05",
+          "value": 12.34
+        },
+        {
+          "month": "2020-06",
+          "value": 8.88
+        },
+        {
+          "month": "2020-07",
+          "value": 7.64
+        },
+        {
+          "month": "2020-08",
+          "value": 11.17
+        },
+        {
+          "month": "2020-09",
+          "value": 14.91
+        },
+        {
+          "month": "2020-10",
+          "value": 18.24
+        },
+        {
+          "month": "2020-11",
+          "value": 22.17
+        },
+        {
+          "month": "2020-12",
+          "value": 23.69
+        },
+        {
+          "month": "2021-01",
+          "value": 23.36
+        },
+        {
+          "month": "2021-02",
+          "value": 21.68
+        },
+        {
+          "month": "2021-03",
+          "value": 19.52
+        },
+        {
+          "month": "2021-04",
+          "value": 17.71
+        },
+        {
+          "month": "2021-05",
+          "value": 11.77
+        },
+        {
+          "month": "2021-06",
+          "value": 8.0
+        },
+        {
+          "month": "2021-07",
+          "value": 8.41
+        },
+        {
+          "month": "2021-08",
+          "value": 11.76
+        },
+        {
+          "month": "2021-09",
+          "value": 14.06
+        },
+        {
+          "month": "2021-10",
+          "value": 17.76
+        },
+        {
+          "month": "2021-11",
+          "value": 20.11
+        },
+        {
+          "month": "2021-12",
+          "value": 23.7
+        },
+        {
+          "month": "2022-01",
+          "value": 25.17
+        },
+        {
+          "month": "2022-02",
+          "value": 21.69
+        },
+        {
+          "month": "2022-03",
+          "value": 18.99
+        },
+        {
+          "month": "2022-04",
+          "value": 15.78
+        },
+        {
+          "month": "2022-05",
+          "value": 10.87
+        },
+        {
+          "month": "2022-06",
+          "value": 8.27
+        },
+        {
+          "month": "2022-07",
+          "value": 9.38
+        },
+        {
+          "month": "2022-08",
+          "value": 11.07
+        },
+        {
+          "month": "2022-09",
+          "value": 13.47
+        },
+        {
+          "month": "2022-10",
+          "value": 17.56
+        },
+        {
+          "month": "2022-11",
+          "value": 23.48
+        },
+        {
+          "month": "2022-12",
+          "value": 24.97
+        },
+        {
+          "month": "2023-01",
+          "value": 24.92
+        },
+        {
+          "month": "2023-02",
+          "value": 23.17
+        },
+        {
+          "month": "2023-03",
+          "value": 23.18
+        },
+        {
+          "month": "2023-04",
+          "value": 16.8
+        },
+        {
+          "month": "2023-05",
+          "value": 14.19
+        },
+        {
+          "month": "2023-06",
+          "value": 10.45
+        },
+        {
+          "month": "2023-07",
+          "value": 10.04
+        },
+        {
+          "month": "2023-08",
+          "value": 11.98
+        },
+        {
+          "month": "2023-09",
+          "value": 14.02
+        },
+        {
+          "month": "2023-10",
+          "value": 18.04
+        },
+        {
+          "month": "2023-11",
+          "value": 20.55
+        },
+        {
+          "month": "2023-12",
+          "value": 23.29
+        },
+        {
+          "month": "2024-01",
+          "value": 23.98
+        },
+        {
+          "month": "2024-02",
+          "value": 24.07
+        },
+        {
+          "month": "2024-03",
+          "value": 22.44
+        },
+        {
+          "month": "2024-04",
+          "value": 16.0
+        },
+        {
+          "month": "2024-05",
+          "value": 7.99
+        },
+        {
+          "month": "2024-06",
+          "value": 10.54
+        },
+        {
+          "month": "2024-07",
+          "value": 7.08
+        },
+        {
+          "month": "2024-08",
+          "value": 9.29
+        },
+        {
+          "month": "2024-09",
+          "value": 16.51
+        },
+        {
+          "month": "2024-10",
+          "value": 19.49
+        },
+        {
+          "month": "2024-11",
+          "value": 21.07
+        },
+        {
+          "month": "2024-12",
+          "value": 22.19
+        }
+      ],
+      "provider": "NASA POWER",
+      "coordinates": [
+        -65.495,
+        -33.687
+      ],
+      "url": "https://power.larc.nasa.gov/api/temporal/monthly/point?parameters=T2M&community=AG&longitude=-65.495&latitude=-33.687&start=2000&end=2024&format=JSON",
+      "retrievedAt": "2026-11-15T20:17:05.595140+00:00",
+      "summary": {
+        "id": "power-temperature",
+        "provider": "NASA POWER",
+        "product": null,
+        "variable": "T2M",
+        "unit": "C",
+        "coordinates": [
+          -65.495,
+          -33.687
+        ],
+        "location": null,
+        "url": "https://power.larc.nasa.gov/api/temporal/monthly/point?parameters=T2M&community=AG&longitude=-65.495&latitude=-33.687&start=2000&end=2024&format=JSON",
+        "retrievedAt": "2026-11-15T20:17:05.595140+00:00",
+        "method": "descriptive-v1",
+        "cadence": "monthly",
+        "returnedCount": 300,
+        "validCount": 300,
+        "missingOrInvalidCount": 0,
+        "limitations": [
+          "Statistics describe available observations only; absent timestamps may not be counted.",
+          "Mean is an unweighted mean of native observations, not an annual total or area average.",
+          "OLS trend is descriptive: no seasonal adjustment, autocorrelation correction, confidence interval or causal attribution."
+        ],
+        "start": "2000-01-01",
+        "end": "2024-12-01",
+        "mean": 16.4258,
+        "minimum": 5.41,
+        "maximum": 26.69,
+        "trend": {
+          "method": "ordinary-least-squares",
+          "perYear": 0.028706485753563372,
+          "unit": "C/year",
+          "rSquared": 0.0013143046487215093,
+          "spanYears": 24.91769167060241,
+          "confidenceInterval": null
+        }
+      }
+    }
+  ],
+  "analyses": [
+    {
+      "id": "a1",
+      "struct": "trend_significance",
+      "kind": "statistical",
+      "status": "completed",
+      "targets": [
+        "power-temperature"
+      ],
+      "parameters_effective": {
+        "aggregate": "auto",
+        "min_coverage": 0.8,
+        "gap_policy": "drop",
+        "baseline": null,
+        "alpha": 0.05,
+        "confidence": 0.95,
+        "min_points": 10,
+        "mk_lag": 1
+      },
+      "data_profile": {
+        "n": 300,
+        "cadence": "monthly",
+        "native_cadence": "monthly",
+        "regular": true,
+        "span_years": 24.91769167060241,
+        "n_years": 25,
+        "missing_fraction": 0.0,
+        "n_dropped": 0,
+        "n_unparsed": 0,
+        "aggregated": false,
+        "lag1_autocorrelation": 0.253887970766175,
+        "lag1_threshold": 0.11316065276116663,
+        "seasonal_strength": 0.9476760492349681,
+        "unit": "C",
+        "family": "temperature"
+      },
+      "transformations": [],
+      "steps": [
+        {
+          "step": "deseason",
+          "label": "Quitar el ciclo estacional",
+          "method_id": "anomalies",
+          "method_version": "1.0.0-candidate",
+          "status": "completed",
+          "parameters": {
+            "groups": "groups",
+            "baseline": "baseline",
+            "min_count": 20,
+            "kind": "absolute"
+          },
+          "outputs": {
+            "values": {
+              "omitted": true,
+              "length": 300
+            },
+            "kind": "absolute",
+            "uncertainty": "not_estimated",
+            "reference": {
+              "mean": [
+                24.1296,
+                22.692000000000004,
+                20.3872,
+                16.156000000000002,
+                11.693600000000002,
+                8.866,
+                8.0108,
+                10.4224,
+                13.604800000000001,
+                17.456400000000002,
+                20.6552,
+                23.035600000000002
+              ],
+              "std": [
+                1.1192693330919061,
+                1.131473375736257,
+                1.4386674945935214,
+                1.344565357280932,
+                1.4963098074930874,
+                1.2298162464368407,
+                1.342832588225353,
+                1.4551241321619268,
+                1.2758467619585043,
+                1.4127076980040845,
+                1.4011598623997195,
+                0.9139325139199281
+              ],
+              "median": [
+                24.02,
+                22.62,
+                20.3,
+                15.98,
+                11.77,
+                8.88,
+                8.16,
+                10.39,
+                13.5,
+                17.35,
+                20.29,
+                23.01
+              ],
+              "mad": [
+                0.879999999999999,
+                0.8599999999999994,
+                1.0199999999999996,
+                0.7599999999999998,
+                0.7899999999999991,
+                1.0200000000000005,
+                0.8200000000000003,
+                0.9100000000000001,
+                0.8499999999999996,
+                0.889999999999997,
+                0.7800000000000011,
+                0.6500000000000021
+              ],
+              "group_ids": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12
+              ],
+              "count": [
+                25,
+                25,
+                25,
+                25,
+                25,
+                25,
+                25,
+                25,
+                25,
+                25,
+                25,
+                25
+              ],
+              "uncertainty": "not_estimated"
+            }
+          },
+          "units": {
+            "values": "C",
+            "reference.mean": "C",
+            "reference.std": "C",
+            "reference.median": "C",
+            "reference.mad": "C",
+            "reference.group_ids": "1",
+            "reference.count": "1"
+          },
+          "warnings": [
+            "Descriptive anomalies; baseline suitability and physical interpretation require review.",
+            "Un arreglo de 300 elementos se omitió (límite 50)."
+          ],
+          "selected_because": "Anomalías respecto del ciclo mensual de la base (serie mensual con período de referencia)",
+          "uncertainty": "not_estimated"
+        },
+        {
+          "step": "slope",
+          "label": "Pendiente e intervalo",
+          "method_id": "sen_interval",
+          "method_version": "1.0.0-candidate",
+          "status": "completed",
+          "parameters": {
+            "confidence": 0.95
+          },
+          "outputs": {
+            "slope": 0.03629141767323607,
+            "lower": 0.015822222222222453,
+            "upper": 0.05631740890688268,
+            "confidence": 0.95,
+            "n_pairs": 44850,
+            "method": "kendall_rank_tie_corrected",
+            "uncertainty": "asymptotic_confidence_interval"
+          },
+          "units": {
+            "slope": "(C)/(year)",
+            "lower": "(C)/(year)",
+            "upper": "(C)/(year)",
+            "confidence": "1",
+            "n_pairs": "1"
+          },
+          "warnings": [
+            "The interval assumes serial independence; with autocorrelation it is too narrow.",
+            "Normal rank approximation; small samples or ties can give degenerate bounds and inaccurate coverage.",
+            "Seasonality is not removed; this is not a prediction interval."
+          ],
+          "selected_because": "Pendiente de Theil-Sen con intervalo de confianza",
+          "uncertainty": "asymptotic_confidence_interval"
+        },
+        {
+          "step": "test",
+          "label": "Prueba de tendencia",
+          "method_id": "seasonal_mann_kendall",
+          "method_version": "1.0.0-candidate",
+          "status": "completed",
+          "parameters": {
+            "seasons": "<300 etiquetas>"
+          },
+          "outputs": {
+            "score": 509,
+            "variance": 21992.999999999996,
+            "z": 3.4254803074456643,
+            "p_value": 0.0006137134218213305,
+            "tau_a": 0.1413888888888889,
+            "seasonal": true
+          },
+          "units": {
+            "score": "1",
+            "variance": "1",
+            "z": "1",
+            "p_value": "1",
+            "tau_a": "1"
+          },
+          "warnings": [
+            "Asymptotic p-value; small samples may require an exact test.",
+            "Serial/cross-season dependence is not corrected; significance is conditional on independence.",
+            "Significance does not establish causality or physical importance."
+          ],
+          "selected_because": "Serie mensual con ciclo: Mann-Kendall por estación (serie mensual con ciclo estacional)",
+          "uncertainty": "not_estimated"
+        },
+        {
+          "step": "test_modified",
+          "label": "Prueba con corrección por autocorrelación",
+          "method_id": "modified_mann_kendall",
+          "method_version": "1.0.0-candidate",
+          "status": "completed",
+          "parameters": {
+            "correction": "hamed_rao",
+            "lag": 1,
+            "alpha": 0.05
+          },
+          "outputs": {
+            "score": 6123.0,
+            "variance": 4311724.939615435,
+            "z": 2.948273720259287,
+            "p_value": 0.003195539845986861,
+            "correction": "hamed_rao",
+            "lag": 1,
+            "alpha": 0.05
+          },
+          "units": {
+            "score": "1",
+            "variance": "1",
+            "z": "1",
+            "p_value": "1",
+            "tau_a": "1"
+          },
+          "warnings": [
+            "Finite-sample variance correction is model-dependent; not a universal cure for dependence or seasonality."
+          ],
+          "selected_because": "Autocorrelación significativa: Mann-Kendall con corrección de varianza (|r1|=0.25 supera 0.11)",
+          "uncertainty": "not_estimated"
+        }
+      ],
+      "findings": [
+        {
+          "type": "trend",
+          "what": {
+            "variable": "T2M",
+            "family": "temperature",
+            "source_id": "power-temperature",
+            "provider": "NASA POWER",
+            "product": null,
+            "unit": "C"
+          },
+          "where": {
+            "mode": "point",
+            "coordinates": [
+              -65.495,
+              -33.687
+            ],
+            "label": null
+          },
+          "when": {
+            "start": "2000-01-01",
+            "end": "2024-12-01",
+            "cadence": "monthly",
+            "n": 300
+          },
+          "how_much": {
+            "per_year": 0.03629141767323607,
+            "per_decade": 0.3629141767323607,
+            "unit": "C/decade",
+            "unit_per_year": "C/year",
+            "interval": {
+              "lower": 0.15822222222222454,
+              "upper": 0.5631740890688268,
+              "level": 0.95,
+              "unit": "C/decade"
+            },
+            "total_change": 0.9042983558707475,
+            "total_change_unit": "C",
+            "span_years": 24.91769167060241,
+            "direction": "increasing"
+          },
+          "significant": true,
+          "p_value": 0.003195539845986861,
+          "alpha": 0.05,
+          "test": "modified_mann_kendall",
+          "conclusiveness": "conclusive",
+          "statement_key": "trend.significant.increasing",
+          "notes": [
+            "La base 1991-2020 no está cubierta: se usó el período analizado como referencia."
+          ],
+          "limitations": [
+            "La significancia no establece causalidad ni importancia física.",
+            "El intervalo de la pendiente supone independencia serial; con autocorrelación es demasiado angosto.",
+            "Un solo punto o estación no representa el promedio de una región."
+          ]
+        }
+      ],
+      "verdict": {
+        "hypothesis": {
+          "kind": "trend",
+          "direction": "increasing"
+        },
+        "status": "supported",
+        "reason_key": "verdict.trend.supported",
+        "evidence": {
+          "p_value": 0.003195539845986861,
+          "alpha": 0.05,
+          "interval_excludes_zero": true,
+          "observed_direction": "increasing",
+          "per_decade": 0.3629141767323607,
+          "unit": "C/decade",
+          "direction_matches": true
+        }
+      },
+      "forecast": null,
+      "charts": [
+        {
+          "kind": "timeseries_trend",
+          "series_ref": "power-temperature",
+          "overlays": [
+            {
+              "type": "trend_slope",
+              "step": "slope",
+              "per_year": 0.03629141767323607,
+              "lower_per_year": 0.015822222222222453,
+              "upper_per_year": 0.05631740890688268,
+              "level": 0.95
+            }
+          ]
+        }
+      ],
+      "warnings": [
+        {
+          "step": "deseason",
+          "message": "Descriptive anomalies; baseline suitability and physical interpretation require review."
+        },
+        {
+          "step": "deseason",
+          "message": "Un arreglo de 300 elementos se omitió (límite 50)."
+        },
+        {
+          "step": "slope",
+          "message": "The interval assumes serial independence; with autocorrelation it is too narrow."
+        },
+        {
+          "step": "slope",
+          "message": "Normal rank approximation; small samples or ties can give degenerate bounds and inaccurate coverage."
+        },
+        {
+          "step": "slope",
+          "message": "Seasonality is not removed; this is not a prediction interval."
+        },
+        {
+          "step": "test",
+          "message": "Asymptotic p-value; small samples may require an exact test."
+        },
+        {
+          "step": "test",
+          "message": "Serial/cross-season dependence is not corrected; significance is conditional on independence."
+        },
+        {
+          "step": "test",
+          "message": "Significance does not establish causality or physical importance."
+        },
+        {
+          "step": "test_modified",
+          "message": "Finite-sample variance correction is model-dependent; not a universal cure for dependence or seasonality."
+        }
+      ],
+      "errors": []
+    }
+  ],
+  "warnings": [],
+  "errors": [],
+  "assistant_digest": {
+    "request_hash": "sha256:d6309b299e9e2a1d238866db9fecf9d0f735f9069334e25781245ecf64725116",
+    "status": "completed",
+    "analyses": [
+      {
+        "id": "a1",
+        "struct": "trend_significance",
+        "status": "completed",
+        "findings": [
+          {
+            "type": "trend",
+            "what": {
+              "variable": "T2M",
+              "family": "temperature",
+              "source_id": "power-temperature",
+              "provider": "NASA POWER",
+              "product": null,
+              "unit": "C"
+            },
+            "where": {
+              "mode": "point",
+              "coordinates": [
+                -65.495,
+                -33.687
+              ],
+              "label": null
+            },
+            "when": {
+              "start": "2000-01-01",
+              "end": "2024-12-01",
+              "cadence": "monthly",
+              "n": 300
+            },
+            "how_much": {
+              "per_year": 0.03629141767323607,
+              "per_decade": 0.3629141767323607,
+              "unit": "C/decade",
+              "unit_per_year": "C/year",
+              "interval": {
+                "lower": 0.15822222222222454,
+                "upper": 0.5631740890688268,
+                "level": 0.95,
+                "unit": "C/decade"
+              },
+              "total_change": 0.9042983558707475,
+              "total_change_unit": "C",
+              "span_years": 24.91769167060241,
+              "direction": "increasing"
+            },
+            "significant": true,
+            "p_value": 0.003195539845986861,
+            "alpha": 0.05,
+            "test": "modified_mann_kendall",
+            "conclusiveness": "conclusive",
+            "statement_key": "trend.significant.increasing",
+            "notes": [
+              "La base 1991-2020 no está cubierta: se usó el período analizado como referencia."
+            ],
+            "limitations": [
+              "La significancia no establece causalidad ni importancia física.",
+              "El intervalo de la pendiente supone independencia serial; con autocorrelación es demasiado angosto.",
+              "Un solo punto o estación no representa el promedio de una región."
+            ]
+          }
+        ],
+        "verdict": {
+          "hypothesis": {
+            "kind": "trend",
+            "direction": "increasing"
+          },
+          "status": "supported",
+          "reason_key": "verdict.trend.supported",
+          "evidence": {
+            "p_value": 0.003195539845986861,
+            "alpha": 0.05,
+            "interval_excludes_zero": true,
+            "observed_direction": "increasing",
+            "per_decade": 0.3629141767323607,
+            "unit": "C/decade",
+            "direction_matches": true
+          }
+        },
+        "warnings": [
+          "Descriptive anomalies; baseline suitability and physical interpretation require review.",
+          "Un arreglo de 300 elementos se omitió (límite 50).",
+          "The interval assumes serial independence; with autocorrelation it is too narrow."
+        ],
+        "errors": []
+      }
+    ],
+    "sources": [
+      {
+        "id": "power-temperature",
+        "provider": "NASA POWER",
+        "product": null,
+        "unit": "C",
+        "url": "https://power.larc.nasa.gov/api/temporal/monthly/point?parameters=T2M&community=AG&longitude=-65.495&latitude=-33.687&start=2000&end=2024&format=JSON",
+        "retrievedAt": "2026-11-15T20:17:05.595140+00:00",
+        "coordinates": [
+          -65.495,
+          -33.687
+        ]
+      }
+    ],
+    "errors": [],
+    "truncated": false
+  }
+}

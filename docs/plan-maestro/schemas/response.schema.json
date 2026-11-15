@@ -1,0 +1,109 @@
+{
+  "additionalProperties": false,
+  "description": "Top-level shape of response.json; nested blocks are documented in docs/plan-maestro/23.",
+  "properties": {
+    "schema": {
+      "const": "earth-detective/response",
+      "default": "earth-detective/response",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "request_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Request Id"
+    },
+    "request_hash": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Request Hash"
+    },
+    "status": {
+      "enum": [
+        "completed",
+        "partial",
+        "failed"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "generated_at": {
+      "title": "Generated At",
+      "type": "string"
+    },
+    "engine": {
+      "additionalProperties": true,
+      "title": "Engine",
+      "type": "object"
+    },
+    "series": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Series",
+      "type": "array"
+    },
+    "analyses": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Analyses",
+      "type": "array"
+    },
+    "assistant_digest": {
+      "additionalProperties": true,
+      "title": "Assistant Digest",
+      "type": "object"
+    },
+    "warnings": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Warnings",
+      "type": "array"
+    },
+    "errors": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Errors",
+      "type": "array"
+    }
+  },
+  "required": [
+    "status",
+    "generated_at",
+    "engine",
+    "series",
+    "analyses",
+    "assistant_digest",
+    "warnings",
+    "errors"
+  ],
+  "title": "ResponseDocument",
+  "type": "object"
+}

@@ -142,17 +142,32 @@ def _analyze_many(spec, resolved, series_by_id: dict, sources: dict, source_erro
 
 
 def _analyze_pattern(spec, resolved, sample_ids: list, series_by_id: dict, sources: dict, source_errors: dict, request) -> dict:
-    """Trend on every sample point + false discovery rate control across the points."""
+    """Trend on every DISTINCT sample series + false discovery rate control across them.
+
+    Points that fall in the same provider cell return identical series; they are analysed once
+    (counting them separately would inflate the evidence) and reported as sharing that series.
+    """
     trend = BY_ID["trend_significance"]
     params = {name: resolved.params[name] for name in trend.params}
     options = request.options.model_copy(update={"include_steps": False})
-    blocks = []
-    for index, sample_id in enumerate(sample_ids, 1):
+    groups: dict = {}
+    for sample_id in sample_ids:
+        series = series_by_id.get(sample_id)
+        key = json.dumps(series.get("points"), sort_keys=True) if series and series.get("points") else sample_id
+        groups.setdefault(key, []).append(sample_id)
+    distinct = [members[0] for members in groups.values()]
+    shared_by = {members[0]: members for members in groups.values()}
+    blocks, trends = [], []
+    for index, sample_id in enumerate(distinct, 1):
         sub = AnalysisSpec(id=f"{spec.id}.{index}", struct="trend_significance", targets=[sample_id])
         sub_resolved = analysis_handler.ResolvedAnalysis(sub.id, trend, params, None)
-        blocks.append(_analyze_one(sub, sub_resolved, series_by_id.get(sample_id), sources[sample_id],
-                                   source_errors.get(sample_id) or source_errors.get("*"), options))
-    trends = [f for b in blocks for f in b["findings"] if f["type"] == "trend" and f.get("p_value") is not None]
+        block = _analyze_one(sub, sub_resolved, series_by_id.get(sample_id), sources[sample_id],
+                             source_errors.get(sample_id) or source_errors.get("*"), options)
+        blocks.append(block)
+        for finding in block["findings"]:
+            if finding["type"] == "trend" and finding.get("p_value") is not None:
+                finding["shared_by_points"] = len(shared_by[sample_id])
+                trends.append(finding)
     alpha = resolved.params["alpha"]
     findings = []
     if trends:
@@ -166,7 +181,7 @@ def _analyze_pattern(spec, resolved, sample_ids: list, series_by_id: dict, sourc
             "where": {"mode": "area_sample", "n_points": len(sample_ids), "coordinates": None,
                       "label": "Muestra de puntos dentro del polígono (no es un promedio zonal)"},
             "when": first["when"],
-            "how_much": {"n_points": len(sample_ids), "n_analyzed": len(trends),
+            "how_much": {"n_points": len(sample_ids), "n_distinct_series": len(distinct), "n_analyzed": len(trends),
                          "n_significant_raw": sum(1 for f in trends if f["significant"]),
                          "n_significant_fdr": int(result["rejected"].sum()), "alpha": alpha,
                          "mean_per_decade": sum(slopes) / len(slopes), "unit": first["how_much"]["unit"],
@@ -175,7 +190,10 @@ def _analyze_pattern(spec, resolved, sample_ids: list, series_by_id: dict, sourc
             "conclusiveness": "descriptive", "statement_key": "spatial.pattern",
             "notes": ["Muestra de puntos: no representa el promedio ni la totalidad del área."],
             "limitations": ["Los puntos vecinos no son independientes: el control de falsos descubrimientos es aproximado.",
-                            "La resolución de la fuente puede ser mayor que el espaciado de la muestra."]})
+                            "La resolución de la fuente puede ser mayor que el espaciado de la muestra."]
+                           + ([f"{len(sample_ids)} puntos dieron solo {len(distinct)} series distintas (caen en la misma "
+                               "celda de la fuente); la tendencia y el control de falsos descubrimientos se hicieron "
+                               "una vez por serie distinta."] if len(distinct) < len(sample_ids) else [])})
     findings.extend(trends)
     statuses = [b["status"] for b in blocks]
     status = ("completed" if all(s == "completed" for s in statuses)

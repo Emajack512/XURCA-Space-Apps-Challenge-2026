@@ -196,7 +196,9 @@ const FINDINGS = {
     const h = finding.how_much;
     return {
       headline: `Patrón en una muestra de ${h.n_points} puntos`,
-      lines: [`${h.n_significant_fdr} de ${h.n_analyzed} puntos con tendencia significativa tras controlar falsos descubrimientos (${h.n_significant_raw} sin control)`,
+      lines: [...(h.n_distinct_series !== undefined && h.n_distinct_series < h.n_points
+          ? [`Solo ${h.n_distinct_series} series distintas: varios puntos caen en la misma celda de la fuente`] : []),
+        `${h.n_significant_fdr} de ${h.n_analyzed} series con tendencia significativa tras controlar falsos descubrimientos (${h.n_significant_raw} sin control)`,
         `Pendiente media: ${fmt(h.mean_per_decade)} ${unit(h.unit)} · ${h.n_positive} positivas, ${h.n_negative} negativas`]
     };
   }

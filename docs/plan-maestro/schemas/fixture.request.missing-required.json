@@ -1,0 +1,62 @@
+{
+  "schema": "earth-detective/request",
+  "schema_version": 1,
+  "request_id": "fixture-missing-required",
+  "origin": "manual",
+  "language": "es",
+  "investigation": {
+    "schemaVersion": 1,
+    "time": {
+      "start": "2000-01-01",
+      "end": "2024-12-31",
+      "resolution": "Mensual"
+    },
+    "geography": {
+      "scope": "point",
+      "selection": {
+        "features": [
+          {
+            "id": "p1",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -65.495,
+                -33.687
+              ]
+            },
+            "properties": {
+              "name": "Villa Mercedes"
+            }
+          }
+        ]
+      }
+    },
+    "sources": [
+      {
+        "id": "power-temperature",
+        "access": "nasa.power.monthly",
+        "upstream": {
+          "variableId": "T2M",
+          "geometryId": "p1",
+          "selectors": {
+            "community": "AG"
+          }
+        }
+      }
+    ]
+  },
+  "analyses": [
+    {
+      "id": "a1",
+      "struct": "smoothing",
+      "targets": [
+        "power-temperature"
+      ]
+    }
+  ],
+  "options": {
+    "include_steps": true,
+    "max_points_per_array": 50,
+    "allow_partial": true
+  }
+}

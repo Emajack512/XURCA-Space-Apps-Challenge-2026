@@ -47,7 +47,9 @@ Sin `VIRTUAL_ENV` falla con «activate the python virtual environment first». `
 | 3 | Pronóstico: W07–W09, W13, W20 + `forecast_backtest`; W06; structs `forecast` y `spatial_pattern`; `spatial.py` | Hecha; `forecast` verificado |
 | 4 | W19, W10, W11, W12, W14, W15, W16 como API de Python | Solo W10 registrada (struct `precipitation_indices`); W11, W12, W14, W15, W16, W19 y la convolución 2D (`signal/convolution2d.py`, el «FIR 2D» del diagrama) siguen sin registrar: necesitan ráster o varias variables diarias que los conectores no entregan |
 
-Structs (13): `describe`, `trend_significance`, `anomaly`, `drought_spi`, `regression_fit`, `forecast`, `spatial_pattern`, `seasonality`, `change_point`, `smoothing`, `extreme_events`, `relationship`, `precipitation_indices`. No verificados aún: `drought_spi`, `spatial_pattern`, `precipitation_indices`.
+Structs (13): `describe`, `trend_significance`, `anomaly`, `drought_spi`, `regression_fit`, `forecast`, `spatial_pattern`, `seasonality`, `change_point`, `smoothing`, `extreme_events`, `relationship`, `precipitation_indices`. **Los 13 verificados a mano con datos reales** (etapa A): `drought_spi` con POWER PRECTOTCORR 1991–2024 (escalas 1, 3, 6, 12); `precipitation_indices` con ERA5 `precipitation_sum` diario 2015–2024 (Rx1day 32–47 mm); `spatial_pattern` con un polígono alrededor de Villa Mercedes.
+
+`spatial_pattern` agrupa los puntos con series idénticas (caen en la misma celda de la fuente; con POWER, 9 puntos en ~1° × 0,7° dan 4 series): tendencia y FDR una vez por serie distinta, `how_much.n_distinct_series` y `shared_by_points` en cada tendencia, más una limitación explícita. Antes contaba 9 series «significativas» y exageraba la evidencia.
 
 **Parámetros obligatorios sin valor por defecto** (`ParamSpec.required=True`, `INVALID_REQUEST` si faltan): `penalty` (change_point), `window` (smoothing), `q` y `min_duration` (extreme_events), `lags` (relationship). Provisionales: `harmonics` 2, `min_size` 6, `components` [0].
 
@@ -87,9 +89,10 @@ Structs (13): `describe`, `trend_significance`, `anomaly`, `drought_spi`, `regre
 3. **CHIRPS** (`data.chc.ucsb.edu`) no responde desde la red de Ema (DNS resuelve, la conexión da timeout); POWER y Open-Meteo sí. Es de red, no de código.
 4. **Datos espaciales:** la convolución 2D y W11–W19 necesitan un conector de ráster; decidir si entra en esta versión.
 5. **Auditoría independiente** pendiente de W01–W03 y de todo lo nuevo; todo está en estado `candidate`.
-6. Sin generar los JSON Schema ni fixtures (`contracts.export_schemas()` los produce bajo demanda).
+6. JSON Schema y fixtures generados en `docs/plan-maestro/schemas/` (ver su README); regenerarlos si cambia `contracts.py`.
 7. `fire/fwi.py`: rechaza |lat| < 30° y no se comparó con tablas de referencia.
-8. `tests/test_climatology.py` y `services/test_assistant.py` no se corrieron tras los cambios; tests que cuenten métodos del registro pueden fallar.
+8. `models/tests/test_climatology.py` pasa (33 tests, `robust_z` coherente). Ningún test cuenta los métodos del registro. `services/test_assistant.py` no se corrió (es del asistente de JP).
+12. `drought_spi` con POWER a escala 1 da mínimos de −4,75 (meses secos con ceros): revisar en la auditoría el ajuste gamma con ceros.
 9. Desvíos de la fase 2: el paso `fdr` de `relationship` lo hace `decision.py` con `fdr_bh` (W06); `seasonality` informa coeficientes armónicos, amplitud espectral anual y rango STL; `change_point` calcula medias por tramo con NumPy (descriptivo); no hay `cusum`; `extreme_events` con hipótesis `threshold` compara un estadístico de la serie.
 10. Desvíos respecto del plan 23: sin paso `lttb` en `describe`; `lag1_autocorrelation` acepta `groups`; código de error `CADENCE_INCOMPATIBLE`; el pronóstico es un único método registrado (`forecast_backtest`).
 11. Avisos de Git sobre LF/CRLF: inofensivos.
@@ -98,7 +101,7 @@ Structs (13): `describe`, `trend_significance`, `anomaly`, `drought_spi`, `regre
 
 Orden pensado para no quedar bloqueados: primero lo que no depende de nadie (A), en paralelo se prepara la decisión científica (B), y lo grande o lo que depende de datos reales va después (C–F). Cada función nueva o cambiada sigue el protocolo de una función por solicitud de `PY/models/AGENTS.md`. Verificación: a mano (llamada a `data_handler.run` con un pedido real + prueba en la interfaz), sin suites automáticas.
 
-### Etapa A — Sin esperar decisiones (Ema + Claude)
+### Etapa A — Sin esperar decisiones (Ema + Claude) — **HECHA (2026-11-15)**: schemas y fixtures generados y validados, los 3 structs probados (y corregido `spatial_pattern`), `test_climatology.py` pasa
 1. **Contratos:** correr `contracts.export_schemas()` y guardar los JSON Schema de request/response y un par de fixtures reales (el pedido de Villa Mercedes) en `docs/plan-maestro/schemas/`. Listo cuando el frontend y el chat puedan validar contra ellos.
 2. **Probar los 3 structs sin verificar**, uno por vez, con datos que los cubran:
    - `drought_spi`: precipitación mensual de POWER o PMRA, ≥ 30 años (la base 1991–2020 lo pide).
