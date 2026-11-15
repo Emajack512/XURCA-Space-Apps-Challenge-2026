@@ -75,7 +75,7 @@ PRESERVATION.json ni se regeneró ese manifiesto.
 
 SUPUESTOS Y LÍMITES CIENTÍFICOS:
 Observaciones finitas, sin máscaras, grupos enteros, pesos iguales.
-Desvío poblacional ddof=0; MAD cruda, robust_z=(x-mediana)/MAD sin escalar.
+Desvío poblacional ddof=0; MAD cruda en la referencia; robust_z=(x-mediana)/(1,4826·MAD) (decisión del 2026-11-15).
 No elige el período de base ni estima incertidumbre. Percent requiere una
 escala de razón físicamente adecuada. No infiere fechas, convierte unidades,
 interpola, pronostica ni prueba significancia. Desbordamientos se rechazan.

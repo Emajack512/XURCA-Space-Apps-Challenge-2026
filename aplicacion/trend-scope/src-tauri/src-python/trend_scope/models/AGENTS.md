@@ -70,8 +70,9 @@ Sí están documentados y pueden ser valores por defecto: nivel de confianza `0.
 ```text
 models/
 ├─ climate/        climatology.py · spi.py · events.py · etccdi.py     (carpeta nueva)
-├─ stats/          sen_interval.py · lagged.py · multiple_testing.py · bootstrap.py
-├─ forecasting/    baselines.py · backtest.py · intervals.py · prob_metrics.py   (carpeta nueva)
+├─ stats/          sen_interval.py · lagged.py · multiple_testing.py · bootstrap.py · diagnostics.py · descriptive.py
+├─ signal/         convolution2d.py
+├─ forecasting/    baselines.py · backtest.py · intervals.py · prob_metrics.py · forecasters.py   (carpeta nueva)
 ├─ fire/           fwi.py                                              (carpeta nueva)
 ├─ vegetation/     burn_indices.py                                     (carpeta nueva)
 ├─ landcover/      transitions.py                                      (carpeta nueva)
@@ -126,8 +127,8 @@ Orden recomendado: el de la numeración. «Destraba» indica fenómenos del cat�
 
 **Estado de la cola** (única línea que se edita al entregar una tarea):
 
-- Pendientes: W04, W05, W06, W07, W08, W09, W10, W11, W12, W13, W14, W15, W16
-- Candidate: W01, W02, W03
+- Pendientes: W05, W04
+- Candidate: W01 (`robust_z` corregido el 2026-11-15; pendiente de auditoría), W02, W03, W06, W07, W08, W09, W10, W11, W12, W13, W14, W15, W16, W17, W18, W19, W20 (todas implementadas sin ejecutar ni probar; W06-W09, W17, W18 y W20 se usan desde los handlers, el resto son API de Python sin registrar)
 - Aprobadas tras auditoría: —
 
 | ID | Función | Depende de | Destraba |
@@ -148,6 +149,12 @@ Orden recomendado: el de la numeración. «Destraba» indica fenómenos del cat�
 | W14 | Índices de quema y recuperación | W11 | N1.4D, B9.3, B2.6 |
 | W15 | Matriz de transición de cobertura | — | B1.1, B2.1, N1.3A, B8.3 |
 | W16 | Ecuación hipsométrica | — | N1.8.1 |
+| W17 | Diagnósticos de serie (autocorrelación lag-1, fuerza estacional) | — | Reglas de selección del Algorithm Handler |
+| W18 | Estadística descriptiva | — | Struct `describe` |
+| W19 | Convolución 2D / FIR 2D | — | Suavizado espacial (nota del mapa de arquitectura) |
+| W20 | Pronosticadores para backtesting | W08 | Struct `forecast` |
+
+W17–W20 se agregaron el 2026-11-15 con el plan `docs/plan-maestro/23_ARQUITECTURA_HANDLERS.md`: son las funciones que los handlers (`trend_scope/handlers/`) necesitan y que no estaban en la cola. El orden de la línea «Pendientes» es el que pide ese plan (primero lo que usa la fase 1 de los handlers).
 
 ### W01 — Climatología y anomalías
 - **Archivo:** `climate/climatology.py`.
@@ -158,6 +165,7 @@ Orden recomendado: el de la numeración. «Destraba» indica fenómenos del cat�
 - **Unidades:** `absolute` en la unidad de la variable; `percent` en `%`; las otras dos adimensionales.
 - **Oráculo:** serie = ciclo estacional conocido + tendencia lineal → la anomalía absoluta recupera la tendencia más la constante esperada.
 - **Límite a documentar:** no decide qué período de base es válido; lo recibe.
+- **Decisión sobre la MAD (plan 23, aprobado el 2026-11-15):** `climatology()['mad']` se devuelve **sin escalar**, en la unidad de la variable (es un estadístico descriptivo). El factor de consistencia con la normal se aplica **dentro de `robust_z`**: `robust_z = (x − mediana) / (1.4826 · MAD)`. Así el resultado es comparable con un z estándar y con los umbrales habituales. La implementación candidate divide por la MAD cruda: corregirla, actualizar el docstring y las pruebas de `tests/test_climatology.py`, y agregar una prueba con datos normales sintéticos (semilla fija) donde `robust_z` y `standardized` tengan dispersión similar. Esta corrección es parte de la auditoría de W01, no una tarea nueva.
 
 ### W02 — Intervalo de confianza de Theil-Sen
 - **Archivo:** `stats/sen_interval.py`. **No modificar `sen_slope`.**
@@ -256,6 +264,32 @@ Orden recomendado: el de la numeración. «Destraba» indica fenómenos del cat�
 - **Archivo:** `atmosphere/hypsometric.py`.
 - **Función:** `pressure_at_height(reference_pressure, reference_height, height, mean_temperature) -> dict`.
 - **Regla:** supuestos explícitos (temperatura media de la capa, aire seco); uso educativo, no una tendencia.
+
+### W17 — Diagnósticos de serie
+- **Archivo:** `stats/diagnostics.py`.
+- **Funciones:**
+  - `lag1_autocorrelation(times, values) -> dict` con `r1`, `n`, `threshold` (= 1.96/√n) y `exceeds_threshold`. Serie regular.
+  - `seasonal_strength(times, values, groups) -> dict` con la fracción de varianza explicada por las medias de grupo (`groups` = etiquetas enteras, como en W01) y `n_groups`.
+- **Uso:** el Algorithm Handler las consulta para elegir entre Mann-Kendall, su variante estacional y la modificada. Son **diagnósticos descriptivos**, no pruebas de hipótesis: decirlo en el docstring y en `warnings`.
+
+### W18 — Estadística descriptiva
+- **Archivo:** `stats/descriptive.py`.
+- **Función:** `describe(times, values, *, quantiles=(0.05, 0.25, 0.5, 0.75, 0.95)) -> dict` con `n`, `mean`, `std` (ddof=1; no se calcula con n = 1), `minimum`, `maximum`, `quantiles`, `time_start`, `time_end`.
+- **Unidades:** todas en la unidad de la variable, salvo `n`.
+- **Límite a documentar:** describe las observaciones recibidas; no es un promedio de área ni un total anual.
+
+### W19 — Convolución 2D / FIR 2D
+- **Archivo:** `signal/convolution2d.py`.
+- **Función:** `convolve2d(grid, kernel, *, boundary) -> dict` con `values` (misma forma que `grid`) y `valid` (máscara de las celdas no afectadas por el borde). `boundary ∈ {"reflect", "constant_zero", "valid_only"}`, **obligatorio**.
+- **Reglas:** `grid` y `kernel` reales y finitos, 2D (`numeric.array(..., ndim=2)`); `kernel` de lados impares; límite `max_cells` sobre `grid.size * kernel.size`. No normaliza el núcleo por su cuenta: si no suma 1, lo advierte.
+- **Implementación:** `scipy.signal`/`scipy.ndimage`; no reescribir la convolución.
+- **Registro:** dimensión `("y", "x")`.
+- **Límite a documentar:** suaviza valores de celdas; no pondera por área ni corrige la proyección.
+
+### W20 — Pronosticadores para backtesting
+- **Archivo:** `forecasting/forecasters.py`.
+- **Funciones:** fábricas que devuelven un *callable* `(train_times, train_values, horizon) -> predicciones`, como exige W08: `seasonal_naive_forecaster(period)`, `holt_winters_forecaster(period)`, `sarima_forecaster(order, seasonal_order)`.
+- **Reglas:** **envuelven** a `optional_methods.forecast` sin modificarlo. Órdenes y períodos son argumentos explícitos: no hay búsqueda automática de órdenes. Si falta `statsmodels`, la fábrica lanza `ImportError` con el mensaje de `optional_methods.dependency`.
 
 ---
 

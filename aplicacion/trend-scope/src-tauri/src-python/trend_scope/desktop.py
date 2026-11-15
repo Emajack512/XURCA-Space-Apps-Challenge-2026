@@ -17,6 +17,8 @@ from .services.evidence import with_evidence
 from .services.coverage import CoverageRequest, coverage
 from .services.public_sources import find_places
 from .services.station_catalogs import ina_variables
+from .handlers.analysis_handler import capabilities as analysis_capabilities
+from .handlers.data_handler import run as run_analysis_service
 
 from .configuration import (
     ConfigurationName,
@@ -90,6 +92,23 @@ async def search_places(body: PlaceRequest) -> str:
 @commands.command()
 async def execute_regression(body: RegressionPayload) -> dict:
     return await to_thread.run_sync(execute_regression_service, body)
+
+
+class AnalysisRunRequest(BaseModel):
+    request: dict
+
+
+@commands.command()
+async def run_analysis(body: AnalysisRunRequest) -> str:
+    """request.json -> response.json. Failures come back inside the response, not as exceptions."""
+    response = await to_thread.run_sync(run_analysis_service, body.request)
+    return json.dumps(response, allow_nan=False)
+
+
+@commands.command()
+async def list_analyses() -> str:
+    """Catalogue of available analyses and their parameters (for the form and the assistant)."""
+    return json.dumps(await to_thread.run_sync(analysis_capabilities), allow_nan=False)
 
 
 @commands.command()

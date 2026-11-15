@@ -16,7 +16,7 @@ def test_known_statistics_and_anomalies():
     for key, expected in dict(mean=3, std=np.sqrt(8/3), median=3, mad=2, count=3).items():
         np.testing.assert_allclose(reference[key], [expected])
     for kind, expected in [('absolute', 2), ('percent', 200/3),
-                           ('standardized', 2/np.sqrt(8/3)), ('robust_z', 1)]:
+                           ('standardized', 2/np.sqrt(8/3)), ('robust_z', 1/1.4826)]:
         np.testing.assert_allclose(anomalies([5], [7], reference, kind=kind)['values'], [expected])
 
 
