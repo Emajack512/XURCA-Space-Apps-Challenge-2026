@@ -16,6 +16,9 @@ VARIABLES = {
     "oni": {"anomaly"},
     "nino34-temperature": {"total"},
     "roni": {"roni"},
+    "earthquake-count": {"count"},
+    "earthquake-magnitude": {"magnitude"},
+    "earthquake-depth": {"depth"},
     "relative-humidity": {"RH2M"},
     "temperature": {"T2M", "TAVG"},
     "temperature-max": {"temperature_2m_max"},
@@ -68,8 +71,12 @@ def coverage(request: CoverageRequest, today: Optional[date] = None) -> list[dic
 
 def assess(product, request, start, end):
     selection = product["selection"]
-    if request.scope == "area" and selection not in {"Point/Area", "Index"}:
+    if request.scope == "area" and selection not in {"Point/Area", "Area", "Index"}:
         return "incompatible", "area"
+    if selection == "Area" and request.scope != "area":
+        return "incompatible", "area"
+    if product.get("maxDays") and (request.end - request.start).days + 1 > product["maxDays"]:
+        return "incompatible", "period_limit"
     if selection == "Point/Area":
         if request.scope not in {"land", "area"}:
             return "incompatible", "land_only"

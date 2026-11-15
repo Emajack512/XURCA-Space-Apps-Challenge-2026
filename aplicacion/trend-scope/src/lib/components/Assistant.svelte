@@ -5,27 +5,58 @@
   import { pyInvoke } from 'tauri-plugin-pytauri-api';
   import { workspace } from '$lib/stores/workspace.js';
   import { assistantCatalog as catalog } from '$lib/services/sources.js';
+  import { providerGeometries } from '$lib/services/sources.js';
   import { configureWorkspace } from '$lib/services/assistantConfiguration.js';
+  import { prepareInvestigation } from '$lib/services/acquisition.js';
+  import idleMascot from '$lib/assets/mascot/reposo.png';
+  import thinkingMascot from '$lib/assets/mascot/pensando.png';
+  import analyzingMascot from '$lib/assets/mascot/analizando.png';
+  import discoveryMascot from '$lib/assets/mascot/descubrimiento.png';
+  import errorMascot from '$lib/assets/mascot/error.png';
+  import restingMascot from '$lib/assets/mascot/descansando.png';
 
-  let { series = [], processing = false, onprocess = () => {} } = $props();
+  let { series = [], running = false, storageBusy = false, acquisitionError = '',
+    onprocess = () => {}, onresults = () => {} } = $props();
   let failedQuestion = $state('');
   let recovering = $state(false);
 
   let draft = $state('');
   let messages = $state([]);
   let busy = $state(false);
+  let configured = $state(false);
   let thread;
   const tr = (es, en) => $workspace.visual.language === 'en' ? en : es;
+  let processing = $derived(running || storageBusy);
+  let mascot = $derived.by(() => {
+    if (busy) return { image: thinkingMascot, status: tr('Preparando respuesta…', 'Preparing a reply…') };
+    if (running) return { image: analyzingMascot, status: tr('Consultando las fuentes…', 'Fetching data…') };
+    if (failedQuestion || acquisitionError) return { image: errorMascot, status: tr('La consulta no pudo completarse.', 'The request could not be completed.') };
+    if (series.length) return { image: discoveryMascot, status: tr('Resultados disponibles', 'Results available') };
+    if (messages.length) return { image: restingMascot, status: tr('Esperando tu mensaje', 'Waiting for your message') };
+    return { image: idleMascot, status: '' };
+  });
   const sourceOptions = catalog.map(item => ({ id: item.id, label: item.label,
-    variable: item.variable, access: item.route.id, code: item.code, selection: item.featureType ?? (item.route.id === 'noaa.ncei.station' ? 'Station' : 'Point') }));
+    geometries: providerGeometries(item.route) }));
+  let prepared = $derived.by(() => {
+    try { return { investigation: prepareInvestigation($workspace.data) }; }
+    catch (error) { return { error: error.message }; }
+  });
+  let configuredSources = $derived(prepared.investigation?.sources.map(source => {
+    const feature = prepared.investigation.geography.selection.features.find(item => item.id === source.upstream.geometryId);
+    const label = catalog.find(item => item.id === source.id.split('::')[0])?.label ?? source.variable;
+    const place = feature?.properties?.name || (feature?.geometry.type === 'Point' ? tr('Punto del mapa', 'Map point')
+      : feature ? tr('Área del mapa', 'Map area') : '');
+    return { id: source.id, label, place };
+  }) ?? []);
 
   function contextFor(snapshot, retryQuestion) {
     const { data, visual } = snapshot;
     const current = {
       title: data.title?.slice(0, 500), objective: data.objective?.slice(0, 500),
       description: data.description?.slice(0, 500), time: data.time,
+      geographicScope: data.geography.scope,
       sources: data.sources.slice(0, 25).map(({ id, upstream }) => ({
-        id, pointId: upstream?.geometryId, entityId: upstream?.selectors?.stationId ?? upstream?.selectors?.featureId
+        id, geometryId: upstream?.geometryId
       })),
       selections: data.geography.selection.features.slice(-20).map(({ id, geometry, properties }) => ({
         id, type: geometry.type, name: properties?.name?.slice(0, 100),
@@ -109,6 +140,7 @@
         ensureCurrent();
         try {
           if (Object.keys(reply.changes).length) next = await configureWorkspace(snapshot, reply.changes, pyInvoke, language);
+          if (reply.readyToProcess === true) prepareInvestigation((next ?? snapshot).data);
         } catch (error) {
           const reason = String(error.message ?? error);
           if (/^(Hay varios lugares|No encontré|No pude confirmar)/.test(reason)) {
@@ -122,10 +154,20 @@
         }
         ensureCurrent();
         const applied = next && JSON.stringify(next) !== original ? reply.changes : null;
-        if (applied) workspace.set(next);
-        messages.push({ role: 'assistant', text: reply.message, applied,
-          status: applied ? tr('Configuración actualizada. Pulsá Procesar para consultar los datos.', 'Settings updated. Select Process to fetch the data.') : '',
-          evidence: series.length && !Object.keys(reply.changes).length ? original : null });
+        if (applied) {
+          const changedInvestigation = JSON.stringify(next.data) !== JSON.stringify(snapshot.data);
+          workspace.set(next);
+          if (changedInvestigation) {
+            configured = true;
+          }
+        }
+        messages.push({ role: 'assistant', text: reply.message,
+          status: applied ? tr('Configuración aplicada.', 'Settings applied.') : '',
+          evidence: series.length && !reply.readyToProcess && !Object.keys(reply.changes).length ? original : null });
+        if (reply.readyToProcess === true) {
+          configured = true;
+          onprocess();
+        }
         return;
       }
     } catch (error) {
@@ -148,30 +190,57 @@
 </script>
 
 <div class="chat">
+  <div class="mascot" role="status">
+    <img src={mascot.image} alt="" width="56" height="56" draggable="false"/>
+    {#if busy && recovering}
+      <span>{tr('Volviendo a intentar…', 'Trying again…')}</span>
+    {:else if mascot.status}
+      <span>{mascot.status}</span>
+    {/if}
+  </div>
   <div class="thread" role="log" aria-label={tr('Conversación con la IA', 'AI conversation')} bind:this={thread}>
     {#if !messages.length}
-      <p>{tr('¿Qué querés conocer de este lugar?', 'What would you like to know about this place?')}</p>
-      <p class="quiet">{tr('Contame con tus palabras. Te ayudo a elegir los datos y preparar la consulta; no necesitás programar.', 'Describe it in your own words. I will help choose data and prepare the query; no programming needed.')}</p>
+      <p>{tr('¿Qué querés investigar?', 'What would you like to investigate?')}</p>
+      <p class="quiet">{tr('Contame qué querés estudiar. Te voy a preguntar por el lugar o el período si hace falta. También puedo usar un polígono que ya dibujaste.', 'Tell me what you want to study. I will ask for the place or period if needed. I can also use a polygon you already drew.')}</p>
       <button class="example" onclick={() => draft = 'Quiero ver cómo cambió la temperatura en el punto seleccionado entre 2000 y 2024.'}>¿Cómo cambió la temperatura?</button>
       <button class="example" onclick={() => draft = 'Quiero investigar si llueve menos en San Luis.'}>¿Está lloviendo menos en San Luis?</button>
+      <button class="example" onclick={() => draft = tr('Quiero ver la lluvia mensual en el polígono que dibujé.', 'Show monthly precipitation in the polygon I drew.')}>{tr('Estudiar el área dibujada', 'Study the drawn area')}</button>
     {/if}
     {#each messages as message}
       <article class:user={message.role === 'user'}>
-        <strong>{message.role === 'user' ? tr('Vos', 'You') : tr('Asistente', 'Assistant')}</strong>
+        <strong>{message.role === 'user' ? tr('Usuario', 'User') : tr('Asistente', 'Assistant')}</strong>
         <p>{message.text}</p>
         {#if message.status}<p class="quiet">{message.status}</p>{/if}
         {#if message.evidence && message.evidence !== JSON.stringify($workspace)}<p class="quiet">Esta explicación corresponde a una configuración anterior. Procesá la actual para actualizarla.</p>{/if}
-        {#if message.applied}<details><summary>Cambios aplicados (JSON)</summary><pre>{JSON.stringify(message.applied, null, 2)}</pre></details>{/if}
       </article>
     {/each}
-    {#if busy}<p class="quiet">{recovering ? tr('Volviendo a intentar…', 'Trying again…') : tr('Preparando respuesta…', 'Preparing a reply…')}</p>{/if}
   </div>
+  {#if configured}
+    <div class="query-summary">
+      {#if prepared.investigation}
+        <strong>{tr('Investigación', 'Investigation')}</strong>
+        <small>{prepared.investigation.time.start} – {prepared.investigation.time.end}</small>
+        <ul>
+          {#each configuredSources as source (source.id)}
+            <li>{source.label}{source.place ? ' · ' + source.place : ''}</li>
+          {/each}
+        </ul>
+      {:else}
+        <small>{prepared.error}</small>
+      {/if}
+    </div>
+  {/if}
   <div class="actions">
     {#if failedQuestion}
       <button onclick={event => send(event, failedQuestion, true)} disabled={busy || processing}>{tr('Reintentar consulta', 'Retry request')}</button>
     {/if}
-    <button onclick={onprocess} disabled={busy || processing}>{processing ? 'Procesando…' : 'Procesar investigación'}</button>
-    <button onclick={event => send(event, 'Explicame los resultados actuales en lenguaje sencillo, con sus fuentes, unidades y limitaciones.')} disabled={busy || processing || !series.length}>Explicar resultados</button>
+    {#if acquisitionError}
+      <button onclick={onprocess} disabled={busy || processing || !prepared.investigation}>{tr('Reintentar procesamiento', 'Retry processing')}</button>
+    {/if}
+    {#if series.length}
+      <button onclick={onresults} disabled={busy || processing}>{tr('Ver resultados', 'View results')}</button>
+      <button onclick={event => send(event, 'Explicame los resultados actuales en lenguaje sencillo, con sus fuentes, unidades y limitaciones.')} disabled={busy || processing}>{tr('Explicar resultados', 'Explain results')}</button>
+    {/if}
   </div>
   <form onsubmit={send}>
     <textarea aria-label={tr('Mensaje', 'Message')} placeholder={tr('Escribí un mensaje…', 'Write a message…')}
@@ -185,6 +254,8 @@
 
 <style>
   .chat { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  .mascot { display: flex; flex: none; align-items: center; gap: 8px; min-height: 58px; padding: 2px 12px; color: var(--muted); font-size: 12px; }
+  .mascot img { flex: none; object-fit: contain; }
   .thread { flex: 1; overflow: auto; min-height: 0; padding: 12px; scrollbar-width: thin; }
   article { padding: 8px 10px; margin: 0 10% 10px 0; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); overflow-wrap: anywhere; }
   article.user { margin: 0 0 10px 10%; background: var(--raised); }
@@ -194,6 +265,6 @@
   .actions { display: flex; gap: 6px; padding: 8px; flex-wrap: wrap; border-top: 1px solid var(--line); }
   .actions button, .example { font-size: 12px; }
   .example { display: block; margin: 8px 0; text-align: left; width: 100%; white-space: normal; }
-  pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; }
-  details { margin-top: 8px; font-size: 12px; }
+  .query-summary { display: grid; gap: 4px; margin: 0 8px 8px; padding: 8px; border: 1px solid var(--line); border-radius: 7px; max-height: 120px; overflow: auto; }
+  .query-summary ul { margin: 0; padding-left: 18px; font-size: .88em; }
 </style>

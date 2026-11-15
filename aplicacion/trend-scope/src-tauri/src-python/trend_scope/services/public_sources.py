@@ -111,7 +111,8 @@ def find_places(query, kind, language="es"):
         "Georef Argentina", nombre=query.strip(), max=8,
     )
     return [
-        {"id": item["id"], "name": item["nombre"], "province": (item.get("provincia") or {}).get("nombre"),
+        {"id": item["id"], "name": item["nombre"], "country": "Argentina",
+         "province": item["nombre"] if kind == "provincias" else (item.get("provincia") or {}).get("nombre"),
          "coordinates": [item["centroide"]["lon"], item["centroide"]["lat"]]}
         for item in payload[kind.replace("-", "_")]
         if (item.get("centroide") or {}).get("lon") is not None and item["centroide"].get("lat") is not None

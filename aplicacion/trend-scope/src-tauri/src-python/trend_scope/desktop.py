@@ -15,7 +15,7 @@ from .services.appeears import catalog as appeears_catalog
 from .services.assistant import AssistantQuestion, interpret
 from .services.evidence import with_evidence
 from .services.coverage import CoverageRequest, coverage
-from .services.public_sources import find_places
+from .services.public_sources import find_places, place_boundary
 from .services.station_catalogs import ina_variables
 from .handlers.analysis_handler import capabilities as analysis_capabilities
 from .handlers.data_handler import run as run_analysis_service
@@ -87,6 +87,19 @@ async def search_places(body: PlaceRequest) -> str:
     except ValueError as error:
         raise InvokeException(str(error)) from error
     return json.dumps(places, allow_nan=False)
+
+
+class PlaceBoundaryRequest(BaseModel):
+    kind: str
+    id: str
+
+
+@commands.command()
+async def load_place_boundary(body: PlaceBoundaryRequest) -> dict:
+    try:
+        return await to_thread.run_sync(place_boundary, body.kind, body.id)
+    except ValueError as error:
+        raise InvokeException(str(error)) from error
 
 
 @commands.command()

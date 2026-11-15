@@ -1,7 +1,7 @@
 <script>
   import { chartCadences, chartResolutions } from '$lib/services/charts.js';
   import { saveChartImage } from '$lib/services/chartExport.js';
-  import { catalog, geographicEntityRoutes, geometryMatchesScope, sourceMatchesScope } from '$lib/services/sources.js';
+  import { catalog } from '$lib/services/sources.js';
   import { translate } from '$lib/services/i18n.js';
   import { onMount, tick } from 'svelte';
   import { Earth, Aperture, Bot, ChartNoAxesCombined, ChevronDown, CircleHelp, Crosshair, Hand, MapPin, Play, Scan, Hexagon, Settings, Settings2, Trash2, X, Save, FolderOpen } from '@lucide/svelte';
@@ -13,7 +13,7 @@
   import ResizeHandle from '$lib/components/ResizeHandle.svelte';
   import { workspace, defaults, editData, editVisual, selectGeometry } from '$lib/stores/workspace.js';
   import { loadWorkspace, saveWorkspace, downloadJson } from '$lib/services/configuration.js';
-  import { acquireData } from '$lib/services/acquisition.js';
+  import { acquireData, prepareInvestigation } from '$lib/services/acquisition.js';
   import { coordinateLabel, closedRegion, openPolygonNotice, validCoordinates } from '$lib/services/geography.js';
   import '$lib/styles/dashboard.css';
 
@@ -34,6 +34,8 @@
   let coordinateMode = $state('point');
   let modalError = $state('');
   let running = $state(false);
+  let settingsOpen = $state(false);
+  let acquisitionError = $state(null);
   let result = $state(null);
   let chartId = $state(null);
   let savedConfig = $state('');
@@ -110,35 +112,18 @@
   }
   function chooseTool(id) { tool = id; vertices = []; if (notice === openPolygonNotice) notice = ''; }
   function clearSelection() { vertices = []; if (notice === openPolygonNotice) notice = ''; editData(data => data.geography.selection.features = []); }
-  async function run() {
+  async function run({ showChart = true } = {}) {
     if (running || storageBusy) return;
-    const investigation = JSON.parse(configKey);
-    const { scope, selection } = investigation.geography;
-    if (!investigation.sources.length) {
-      notify('Agregá al menos una variable.');
+    let investigation;
+    try {
+      investigation = prepareInvestigation($workspace.data);
+    } catch (error) {
+      notify($translate(error.message));
       return;
-    }
-    investigation.sources = investigation.sources.filter(source => sourceMatchesScope(source, scope, selection.features));
-    if (!investigation.sources.length) {
-      notify($translate('En Fuentes de información, elegí una variable compatible y pulsá Agregar.'));
-      return;
-    }
-    selection.features = selection.features.filter(item => geometryMatchesScope(item.geometry.type, scope));
-    const point = selection.features.filter(item => item.geometry.type === 'Point');
-    for (const source of investigation.sources) {
-      if (geographicEntityRoutes.has(source.access) && !source.upstream.geometryId && selection.features.length === 1) {
-        source.upstream.geometryId = selection.features[0].id;
-      }
-      if (!['nasa.power.monthly', 'openmeteo.archive.daily'].includes(source.access)) continue;
-      if (point.some(item => item.id === source.upstream.geometryId)) continue;
-      if (point.length !== 1) {
-        notify('Marcá un punto o elegí cuál usar en cada variable puntual.');
-        return;
-      }
-      source.upstream.geometryId = point[0].id;
     }
     const startedWith = configKey;
     running = true;
+    acquisitionError = null;
     result = null;
     chartId = null;
     notice = '';
@@ -158,9 +143,11 @@
         return { ...item, placeLabel };
       });
       result = { key: startedWith, series };
-      if (startedWith === configKey) chartId = series[0]?.id ?? null;
+      if (showChart && startedWith === configKey) chartId = series[0]?.id ?? null;
     } catch (error) {
-      notify(String(error.message ?? error));
+      const message = String(error.message ?? error);
+      acquisitionError = { key: startedWith, message };
+      notify(message);
     } finally {
       running = false;
     }
@@ -255,9 +242,9 @@
   async function menuAction(action) { menu = ''; await action(); }
   const menus = [
     ['Proyecto', [['Guardar configuración',save],['Recuperar configuración',() => dirty ? showDialog('restore') : restore()]]],
-    ['Datos', [['Abrir configuración',() => togglePanel('settings',true)],['Ingresar coordenadas',() => openCoordinates()]]],
+    ['Datos', [['Ingresar coordenadas',() => openCoordinates()]]],
     ['Análisis', [['Procesar',run],['Mostrar resultados',() => chartId = currentSeries[0]?.id ?? null]]],
-    ['Visualización', [['Resolución gráfica',() => showDialog('chart-resolution')],['Alternar configuración',() => togglePanel('settings')],['Alternar asistente',() => togglePanel('assistantVisible', !assistantVisible)]]],
+    ['Visualización', [['Resolución gráfica',() => showDialog('chart-resolution')],['Alternar asistente',() => togglePanel('assistantVisible', !assistantVisible)]]],
     ['Capas', [
       ['Alternar fronteras', () => editVisual(visual => visual.map.layers.countries = !visual.map.layers.countries)],
       ['Alternar selecciones', () => editVisual(visual => visual.map.layers.selection = !visual.map.layers.selection)]
@@ -303,7 +290,7 @@
       <button class="tool-button" class:active={mapVisible} aria-pressed={mapVisible}
         title={$translate('Alternar mapa')} aria-label={$translate('Alternar mapa')}
         onclick={() => togglePanel('map', !mapVisible)}><Earth size={17}/></button>
-      <button class="tool-button" class:active={panels.settings} aria-pressed={panels.settings} title={$translate("Configuración")} aria-label={$translate("Alternar panel de configuración")} onclick={() => togglePanel('settings')}><Settings size={17}/></button>
+      <button class="tool-button" class:active={settingsOpen} aria-pressed={settingsOpen} title={$translate("Configuración")} aria-label={$translate("Alternar panel de configuración")} onclick={() => { chartId = null; settingsOpen = !settingsOpen; }}><Settings size={17}/></button>
       <button class="tool-button" class:active={!!activeChart} aria-pressed={!!activeChart} disabled={!currentSeries.length} title={$translate("Gráficas")} aria-label={$translate("Alternar gráficas")} onclick={toggleCharts}><ChartNoAxesCombined size={17}/></button>
       <button class="tool-button" class:active={assistantVisible} aria-pressed={assistantVisible} title={$translate("Asistente de IA")} aria-label={$translate("Alternar asistente")} onclick={() => togglePanel('assistantVisible', !assistantVisible)}><Bot size={17}/></button>
     </div>
@@ -322,7 +309,7 @@
   <main class="view-content">
   <div class="desktop workspace-view" hidden={!!activeChart}
     style:--settings-width={panels.settingsWidth + 'px'} style:--assistant-width={(panels.assistantWidth ?? 330) + 'px'}>
-    {#if panels.settings}
+    {#if settingsOpen}
       <SettingsPanel {openCoordinates}/>
       {#if mapVisible || assistantVisible}<ResizeHandle label={$translate("Ancho del panel de configuración")} value={panels.settingsWidth} min={220} max={450} resize={value => editVisual(visual => visual.workspace.settingsWidth = value)}/>{/if}
     {/if}
@@ -334,7 +321,9 @@
     {#if assistantVisible && mapVisible}<ResizeHandle label={$translate('Ancho del asistente')} value={panels.assistantWidth ?? 388} min={265} max={600} direction={-1} resize={value => editVisual(visual => visual.workspace.assistantWidth = value)}/>{/if}
     <aside class="assistant-panel" hidden={!assistantVisible}>
       <header class="panel-heading"><span><Bot size={16}/> {$translate('Asistente de IA')}</span></header>
-      <Assistant series={currentSeries} processing={running || storageBusy} onprocess={run}/>
+      <Assistant series={currentSeries} {running} {storageBusy}
+        acquisitionError={acquisitionError?.key === configKey ? acquisitionError.message : ''}
+        onprocess={() => run({ showChart: false })} onresults={() => chartId = currentSeries[0]?.id ?? null}/>
     </aside>
   </div>
   {#if activeChart}
