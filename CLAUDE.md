@@ -100,7 +100,7 @@ Mecanismo: `ParamSpec.depends_on` (`"@cadence"` o el nombre de otro parámetro) 
 
 - **D-06 decidida:** `statsmodels`, `pymannkendall`, `ruptures` en `pyproject.toml` (compilan en Windows y en el Linux de Eze).
 - **D-03 resuelta provisionalmente:** valores propuestos desde la literatura (tabla arriba), marcados como no validados. Queda pendiente la validación de la ingeniera química; su documento de mapas no los cubre (menciona un «delta incremental v3 de backend» que no tenemos).
-- **D-21 pendiente:** tolerancias del pronóstico (orígenes, cobertura, habilidad); se fijan después de los primeros backtests reales.
+- **D-21 resuelta provisionalmente:** `min_skill` 0,05 por paso y tolerancia binomial de cobertura (ver etapa C), fijadas tras backtests reales; pendiente de validación por la investigación.
 
 ## Pendientes y riesgos conocidos
 
@@ -110,7 +110,7 @@ Mecanismo: `ParamSpec.depends_on` (`"@cadence"` o el nombre de otro parámetro) 
 4. **Datos espaciales:** la convolución 2D y W11–W19 necesitan un conector de ráster; decidir si entra en esta versión.
 5. **Auditoría independiente** pendiente de W01–W03 y de todo lo nuevo; todo está en estado `candidate`.
 6. JSON Schema y fixtures generados en `docs/plan-maestro/schemas/` (ver su README); regenerarlos si cambia `contracts.py`.
-7. `fire/fwi.py`: rechaza |lat| < 30° y no se comparó con tablas de referencia.
+7. `fire/fwi.py`: verificado contra xclim y corregido (ver etapa F). Las clases de peligro no están implementadas: requieren umbrales validados por región.
 8. `models/tests/test_climatology.py` pasa (33 tests, `robust_z` coherente). Ningún test cuenta los métodos del registro. `services/test_assistant.py` no se corrió (es del asistente de JP).
 12. `drought_spi` con POWER a escala 1 da mínimos de −4,75 (meses secos con ceros): revisar en la auditoría el ajuste gamma con ceros.
 9. Desvíos de la fase 2: el paso `fdr` de `relationship` lo hace `decision.py` con `fdr_bh` (W06); `seasonality` informa coeficientes armónicos, amplitud espectral anual y rango STL; `change_point` calcula medias por tramo con NumPy sobre las anomalías (descriptivo); no hay `cusum`; `extreme_events` con hipótesis `threshold` compara un estadístico de la serie.
@@ -137,7 +137,8 @@ Orden pensado para no quedar bloqueados: primero lo que no depende de nadie (A),
 4. Decidir junto con esto si `change_point` corre sobre anomalías (sin ciclo estacional) en vez de la serie cruda. Si sí: agregar el paso de desestacionalización al struct (método ya existente, sin fórmulas en el handler).
 Listo cuando ningún análisis exija un número que el usuario no sabe elegir.
 
-### Etapa C — Tolerancias del pronóstico (D-21), después de B
+### Etapa C — Tolerancias del pronóstico (D-21) — **HECHA con valores propuestos (2026-11-15)**
+Backtest real (San Luis, Córdoba, Buenos Aires, Salta × T2M/PRECTOTCORR × horizonte 1/6, 1991–2024): con el criterio viejo (skill > 0, cobertura «medida») 9 de 16 salían validados con mejoras de 1–2 % e intervalos que cubrían 56–78 % para un nominal de 90 %. Criterios nuevos en `models/forecasting/pipeline.py`: `validated_forecast` exige mejora del MAE ≥ `min_skill` (0,05, parámetro provisional del struct) sobre la mejor referencia en **cada** paso, y el intervalo solo es `calibrated` si la cobertura fuera de muestra es ≥ nivel − 2·√(nivel·(1−nivel)/n_test) (tolerancia binomial unilateral; `interval.coverage_floor`). Resultado: 2 de 16 validados (lluvia Córdoba h1, temperatura Buenos Aires h1); 2 intervalos marcados como subcubiertos. El panel ya no presenta un intervalo no calibrado como incertidumbre. `horizon_validated` = pasos con mejora ≥ `min_skill`; `horizon_positive_skill` = pasos con mejora > 0. Pasos originales:
 1. Correr `forecast` sobre 5–10 series reales (temperatura y precipitación, varias cadencias) y anotar habilidad, cobertura empírica y horizonte validado de cada una.
 2. Con esos números, el equipo fija orígenes de backtest, tolerancia de cobertura y umbral de habilidad (piso: habilidad > 0, T11). Cargarlos en `analysis_handler.py`/`forecast_backtest`.
 Listo cuando `validated_forecast` tenga criterios documentados y no provisionales.
@@ -148,12 +149,18 @@ Listo cuando `validated_forecast` tenga criterios documentados y no provisionale
 3. Registrar en `catalog_registry.py` y crear structs, una función por vez: convolución 2D / FIR 2D (`signal/convolution2d.py`) primero, después W11, W12, W14, W15, W16, W19 según qué datos entregue el conector. `fire/fwi.py` necesita varias variables diarias (temperatura, humedad, viento, lluvia): requiere un pedido multivariable de ERA5.
 Listo cuando cada struct nuevo dé `completed` con datos reales.
 
-### Etapa E — Pasos faltantes del plan 23 (solo con respaldo)
+### Etapa E — Pasos faltantes del plan 23 — **HECHA (2026-11-15)**
+- `cusum`: método nuevo `cusum_reference` (`models/change_detection/cusum.py`), CUSUM tabular estandarizado con media y desvío de la base de referencia, k = 0,5 y h = 5 (Montgomery; provisionales). `change_point` con `method="cusum"` informa fecha y lado de cada alarma (sin medias entre alarmas: el acumulador se reinicia). San Luis T2M 1991–2024: 6 alarmas, 2020 y 2023 por encima de la base.
+- `lttb` en `describe`: **descartado** (el frontend grafica la serie completa; no tendría consumidor).
+- `event_composite` y `percentile_thresholds`: siguen sin registrar porque ningún struct los usa.
+Pasos originales:
 - `lttb` en `describe` para reducir series largas en vez de omitirlas.
 - `cusum` en `change_point`: solo si B fija baseline, allowance y threshold.
 - Registrar `event_composite` y `percentile_thresholds` (W04) si algún struct los necesita.
 
-### Etapa F — Validación
+### Etapa F — Validación — **FWI HECHO (2026-11-15); auditoría independiente pendiente**
+- `fire/fwi.py` v1.1.0 comparado día por día contra xclim 1.0.0 (entorno aparte, no es dependencia del proyecto) en latitudes −45, −24,8, 0, 22 y 46: FFMC, DC e ISI exactos; DMC/BUI/FWI < 0,006 (forma GFWED de la Ec. 15). Se corrigieron dos errores: el ISI multiplicaba por el viento en vez de `exp(0,05039·W)` (FWI ~3,6 veces más alto) y las tablas de duración del día (septiembre 9,4; bandas sur de GFWED/cffdrs; ya no rechaza |lat| < 30°). Sigue sin struct (necesita varias variables diarias).
+Pasos originales:
 1. **Auditoría independiente** (alguien distinto del autor) de W01–W03 y de todo lo nuevo, con referencia externa por método. Cambiar el estado de `candidate` solo con esa firma (D-08).
 2. `fire/fwi.py`: comparar con las tablas de referencia del FWI canadiense y revisar el rechazo de |lat| < 30°.
 
