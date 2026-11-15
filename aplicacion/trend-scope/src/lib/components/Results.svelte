@@ -34,6 +34,16 @@
           <p>{$translate('No hay valores para el período seleccionado.')}</p>
         {/if}
         {#if item.product}<p class="quiet">{item.product}</p>{/if}
+        {#if item.summary?.validCount}
+          <details>
+            <summary>Resumen calculado sobre la serie completa</summary>
+            <p>Promedio de observaciones: {item.summary.mean.toPrecision(5)} {item.unit} · mínimo: {item.summary.minimum.toPrecision(5)} · máximo: {item.summary.maximum.toPrecision(5)}</p>
+            {#if item.summary.trend}
+              <p>Tendencia lineal descriptiva: {item.summary.trend.perYear.toPrecision(4)} {item.unit}/año.</p>
+            {/if}
+            <p class="quiet">Sin ajuste estacional ni intervalo de confianza. No demuestra causalidad ni significancia estadística. El promedio corresponde a observaciones disponibles, no a un acumulado anual ni a un promedio regional.</p>
+          </details>
+        {/if}
         {#if item.url}<a href={item.url} target="_blank" rel="noreferrer">{$translate('Consulta original')}</a>{/if}
       </article>
     {:else}

@@ -6,13 +6,18 @@
   import { workspace } from '$lib/stores/workspace.js';
   import { catalog } from '$lib/services/sources.js';
   import { configureWorkspace } from '$lib/services/assistantConfiguration.js';
+  import AssistantConnection from './AssistantConnection.svelte';
+
+  let { series = [], processing = false, onprocess = () => {} } = $props();
+  let connected = $state(false);
 
   let draft = $state('');
   let messages = $state([]);
   let busy = $state(false);
   let thread;
   const tr = (es, en) => $workspace.visual.language === 'en' ? en : es;
-  const sourceOptions = catalog.map(item => [item.id, item.label]);
+  const sourceOptions = catalog.map(item => ({ id: item.id, label: item.label,
+    variable: item.variable, access: item.route.id, code: item.code, selection: item.featureType ?? (item.route.id === 'noaa.ncei.station' ? 'Station' : 'Point') }));
 
   function contextFor(snapshot) {
     const { data, visual } = snapshot;
@@ -30,8 +35,13 @@
     };
     const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
     const history = messages.slice(-8).map(({ role, text, status }) => ({ role, text: (text + (status ? '\n' + status : '')).slice(0, 900) }));
-    const prefix = { today, current, sourceOptions };
+    const results = series.filter(item => item.summary).slice(0, 4).map(item => item.summary);
+    const prefix = { today, current, sourceOptions, results, omittedResults: Math.max(0, series.length - results.length) };
     while (history.length && JSON.stringify({ ...prefix, history }).length > 18000) history.shift();
+    while (results.length && JSON.stringify({ ...prefix, history }).length > 18000) {
+      results.pop(); prefix.omittedResults += 1;
+    }
+    if (JSON.stringify({ ...prefix, history }).length > 18000) throw new Error('La investigación es demasiado grande para el chat. Reducí las selecciones o variables.');
     return JSON.stringify({ ...prefix, history });
   }
 
@@ -40,10 +50,10 @@
     if (thread) thread.scrollTop = thread.scrollHeight;
   }
 
-  async function send(event) {
+  async function send(event, suggested = '') {
     event.preventDefault();
-    const question = draft.trim();
-    if (busy || !question) return;
+    const question = suggested || draft.trim();
+    if (busy || processing || !connected || !question) return;
     if (!isTauri()) {
       messages.push({ role: 'assistant', text: tr('Abrí la app de escritorio para usar el chat.', 'Open the desktop app to use the chat.') });
       await scrollToLatest();
@@ -51,7 +61,10 @@
     }
     const snapshot = $workspace;
     const original = JSON.stringify(snapshot);
-    const context = contextFor(snapshot);
+    let context;
+    try { context = contextFor(snapshot); }
+    catch (error) { messages.push({ role: 'assistant', text: error.message }); return; }
+    const evidenceKey = JSON.stringify(series.map(item => item.summary));
     const language = snapshot.visual.language;
     messages.push({ role: 'user', text: question });
     draft = '';
@@ -62,6 +75,10 @@
         question, context, language, endpoint: import.meta.env.VITE_ASSISTANT_ENDPOINT || null
       });
       let status = '';
+      let applied = null;
+      if (JSON.stringify($workspace) !== original || JSON.stringify(series.map(item => item.summary)) !== evidenceKey) {
+        throw new Error('La investigación o sus resultados cambiaron durante la respuesta. Enviá el pedido de nuevo.');
+      }
       if (Object.keys(reply.changes).length) {
         try {
           const next = await configureWorkspace(snapshot, reply.changes, pyInvoke, language);
@@ -70,13 +87,15 @@
           }
           if (JSON.stringify(next) !== original) {
             workspace.set(next);
+            applied = reply.changes;
             status = tr('Configuración actualizada. Pulsá Procesar para ejecutar la consulta.', 'Settings updated. Select Process to run the query.');
           }
         } catch (error) {
           status = tr('No se aplicaron cambios. ', 'No settings were applied. ') + String(error.message ?? error);
         }
       }
-      messages.push({ role: 'assistant', text: reply.message, status });
+      messages.push({ role: 'assistant', text: reply.message, status, applied,
+        evidence: series.length && !Object.keys(reply.changes).length ? original : null });
     } catch (error) {
       messages.push({ role: 'assistant', text: String(error.message ?? error) });
       if (!draft) draft = question;
@@ -88,24 +107,34 @@
 </script>
 
 <div class="chat">
+  <AssistantConnection onstatus={value => connected = value}/>
   <div class="thread" role="log" aria-label={tr('Conversación con la IA', 'AI conversation')} bind:this={thread}>
     {#if !messages.length}
-      <p class="quiet">{tr('Contame qué querés investigar o cómo querés configurar la app.', 'Tell me what you want to investigate or how to set up the app.')}</p>
+      <p>{tr('¿Qué querés conocer de este lugar?', 'What would you like to know about this place?')}</p>
+      <p class="quiet">{tr('Contame con tus palabras. Te ayudo a elegir los datos y preparar la consulta; no necesitás programar.', 'Describe it in your own words. I will help choose data and prepare the query; no programming needed.')}</p>
+      <button class="example" onclick={() => draft = 'Quiero ver cómo cambió la temperatura en el punto seleccionado entre 2000 y 2024.'}>¿Cómo cambió la temperatura?</button>
+      <button class="example" onclick={() => draft = 'Quiero investigar si llueve menos en San Luis.'}>¿Está lloviendo menos en San Luis?</button>
     {/if}
     {#each messages as message}
       <article class:user={message.role === 'user'}>
         <strong>{message.role === 'user' ? tr('Vos', 'You') : tr('Asistente', 'Assistant')}</strong>
         <p>{message.text}</p>
         {#if message.status}<p class="quiet">{message.status}</p>{/if}
+        {#if message.evidence && message.evidence !== JSON.stringify($workspace)}<p class="quiet">Esta explicación corresponde a una configuración anterior. Procesá la actual para actualizarla.</p>{/if}
+        {#if message.applied}<details><summary>Cambios aplicados (JSON)</summary><pre>{JSON.stringify(message.applied, null, 2)}</pre></details>{/if}
       </article>
     {/each}
     {#if busy}<p class="quiet">{tr('Preparando respuesta…', 'Preparing a reply…')}</p>{/if}
+  </div>
+  <div class="actions">
+    <button onclick={onprocess} disabled={busy || processing}>{processing ? 'Procesando…' : 'Procesar investigación'}</button>
+    <button onclick={event => send(event, 'Explicame los resultados actuales en lenguaje sencillo, con sus fuentes, unidades y limitaciones.')} disabled={!connected || busy || processing || !series.length}>Explicar resultados</button>
   </div>
   <form onsubmit={send}>
     <textarea aria-label={tr('Mensaje', 'Message')} placeholder={tr('Escribí un mensaje…', 'Write a message…')}
       maxlength="1200" rows="2" bind:value={draft}
       onkeydown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }}></textarea>
-    <button type="submit" class="primary" disabled={busy || !draft.trim()} aria-label={tr('Enviar mensaje', 'Send message')}>
+    <button type="submit" class="primary" disabled={!connected || busy || processing || !draft.trim()} aria-label={tr('Enviar mensaje', 'Send message')}>
       <Send size={16}/>
     </button>
   </form>
@@ -119,4 +148,9 @@
   article p { margin: 4px 0 0; white-space: pre-wrap; }
   form { flex: none; display: flex; align-items: end; gap: 8px; padding: 10px; border-top: 1px solid var(--line); }
   textarea { resize: none; }
+  .actions { display: flex; gap: 6px; padding: 8px; flex-wrap: wrap; border-top: 1px solid var(--line); }
+  .actions button, .example { font-size: 12px; }
+  .example { display: block; margin: 8px 0; text-align: left; width: 100%; white-space: normal; }
+  pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; }
+  details { margin-top: 8px; font-size: 12px; }
 </style>

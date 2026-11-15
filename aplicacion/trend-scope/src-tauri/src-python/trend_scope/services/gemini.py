@@ -30,7 +30,7 @@ def gemini_text(payload, api_key):
     return reply
 
 
-def post_json(url, payload, headers=None):
+def post_json(url, payload, headers=None, provider="Servicio de IA"):
     request = Request(
         url,
         data=json.dumps(payload).encode("utf-8"),
@@ -38,7 +38,7 @@ def post_json(url, payload, headers=None):
         method="POST",
     )
     try:
-        with urlopen(request, timeout=30) as response:
+        with urlopen(request, timeout=60) as response:
             data = json.load(response)
             if not isinstance(data, dict):
                 raise ValueError()
@@ -47,16 +47,16 @@ def post_json(url, payload, headers=None):
         hints = {
             400: "Revisá la clave y la configuración del proyecto.",
             401: "Revisá la clave de API.",
-            403: "Revisá los permisos y restricciones de la clave en AI Studio.",
+            403: "Revisá los permisos y restricciones de la clave.",
             404: "Revisá que el modelo esté disponible para tu proyecto.",
-            429: "Revisá la cuota del proyecto en AI Studio.",
+            429: "Se alcanzó la cuota del proveedor. Revisá el saldo o intentá más tarde.",
         }
         hint = hints.get(error.code, "Volvé a intentar más tarde.")
-        raise ValueError(f"Gemini devolvió HTTP {error.code}. {hint}") from None
+        raise ValueError(f"{provider} devolvió HTTP {error.code}. {hint}") from None
     except (URLError, TimeoutError):
-        raise ValueError("No se pudo conectar con Gemini.") from None
+        raise ValueError(f"No se pudo conectar con {provider}.") from None
     except (ValueError, UnicodeError):
-        raise ValueError("Gemini devolvió una respuesta ilegible.") from None
+        raise ValueError(f"{provider} devolvió una respuesta ilegible.") from None
 
 def main() -> int:
     api_key = (os.getenv("GEMINI_API_KEY") or getpass("Clave de Gemini: ")).strip()
