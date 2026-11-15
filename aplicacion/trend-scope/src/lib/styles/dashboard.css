@@ -75,6 +75,7 @@ small,.quiet{color:var(--muted)}
 .map-selection{fill:#5df1d14d;stroke:#77fbe0;stroke-width:1.6}
 .map-draft{fill:none;stroke:#f5bd77;stroke-width:1.5;stroke-dasharray:4 2}
 .map-point{fill:#f8c277;stroke:#20364d;stroke-width:1.2}
+.map-point.polygon-start{stroke:#fff;stroke-width:2}
 .map-top,.map-tools,.map-bottom,.map-credit{position:absolute;z-index:2}
 .map-top{top:13px;left:13px;display:flex;gap:6px;pointer-events:none}
 .map-pill,.map-bottom span{border:1px solid #31485d;border-radius:5px;padding:4px 7px;background:#0e1b2be8;color:#bbcede;font-size:11px}
@@ -95,6 +96,19 @@ small,.quiet{color:var(--muted)}
 .result-actions{margin-bottom:10px}
 .chart-card{background:#101b2a;color:#e4edf7;border:1px solid #28394e;border-radius:7px;padding:8px;margin-bottom:10px}
 .chart-card.current{border-color:color-mix(in srgb,var(--accent),#263b50 65%)}
+.event-map{display:grid;gap:8px;margin-block:10px}
+.event-map-viewport{position:relative;height:clamp(280px,52vh,640px);overflow:hidden;border:1px solid var(--line);border-radius:6px;background:var(--map)}
+.event-map-viewport svg{display:block}
+.event-map-viewport circle{cursor:pointer}
+.event-map-viewport circle:focus-visible{outline:none;stroke:#fff;stroke-width:2.5}
+.event-map-land{fill:#304756}
+.event-map-area{fill:#75cdb520;stroke:#78d4bf;stroke-width:1.5}
+.app-shell.light .event-map-land{fill:#b2c8ba}
+.event-map-legend{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px}
+.event-map-legend span{display:inline-flex;align-items:center;gap:5px}
+.event-map-legend i{width:.8em;height:.8em;border:1px solid var(--line);border-radius:50%}
+.event-map-time{display:grid;gap:4px}
+.event-map-time input{width:100%}
 .app-shell .chart-title{color:#e4edf7;min-width:0;flex:1;justify-content:flex-start;white-space:normal;text-align:left;font-weight:650;padding:2px 4px}
 .chart-meta{font-size:11px;color:#9aacc0;padding:4px}
 .chart-meta select{width:auto;max-width:59%;margin-left:auto}
@@ -135,8 +149,6 @@ dialog p[role=alert]{color:var(--warning)}
 @media(max-width:470px){.topbar nav button{padding:4px;gap:2px}.project-tag{max-width:115px}.toolbar .run-actions{margin-left:0}.statusbar .footer-demo{font-size:.86em}.map-pill:nth-child(2){display:none}}
 .place-search{display:grid;gap:6px}.place-search>button{white-space:normal;text-align:left}
 .world-map{position:absolute;inset:0}
-.world-actions{position:absolute;bottom:28px;left:10px;display:flex;gap:5px}
-.app-shell .world-actions button{background:var(--panel)}
 .map-message{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--panel);border:1px solid var(--line);padding:12px;border-radius:6px;text-align:center}
 .app-shell .maplibregl-ctrl button{padding:0}
 .app-shell .maplibregl-ctrl-attrib-button{min-height:24px}

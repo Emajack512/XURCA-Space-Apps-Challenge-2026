@@ -6,6 +6,7 @@ import json
 import math
 import re
 from datetime import date, datetime, timedelta, timezone
+from functools import lru_cache
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import urlopen
@@ -96,21 +97,50 @@ def fetch_public_series(source, period):
     }
 
 
+GEOREF = "https://apis.datos.gob.ar/georef/api/v2.0/"
+BOUNDARY_KINDS = {"provincias", "localidades-censales"}
+
+
 def find_places(query, kind, language="es"):
-    if kind not in ("localidades", "provincias") or not 2 <= len(query.strip()) <= 100:
+    if kind not in BOUNDARY_KINDS | {"localidades"} or not 2 <= len(query.strip()) <= 100:
         raise ValueError("Ingresá entre 2 y 100 caracteres para buscar un lugar.")
     if kind == "localidades":
         return find_world_cities(query, language)
     payload, _ = request_json(
-        "https://apis.datos.gob.ar/georef/api/v2.0/" + kind,
+        GEOREF + kind,
         "Georef Argentina", nombre=query.strip(), max=8,
     )
     return [
         {"id": item["id"], "name": item["nombre"], "province": (item.get("provincia") or {}).get("nombre"),
          "coordinates": [item["centroide"]["lon"], item["centroide"]["lat"]]}
-        for item in payload[kind]
+        for item in payload[kind.replace("-", "_")]
         if (item.get("centroide") or {}).get("lon") is not None and item["centroide"].get("lat") is not None
     ]
+
+
+@lru_cache(maxsize=2)
+def georef_boundaries(kind):
+    payload, _ = request_json(GEOREF + kind + ".geojson", "Georef Argentina")
+    return {item["properties"]["id"]: item["geometry"] for item in payload["features"]
+            if item.get("geometry") and item["geometry"]["type"] in {"Polygon", "MultiPolygon"}}
+
+
+def place_boundary(kind, identifier):
+    if kind not in BOUNDARY_KINDS or not re.fullmatch(r"[0-9]{2,12}", identifier):
+        raise ValueError("El lugar seleccionado no tiene un identificador de área válido.")
+    geometry = georef_boundaries(kind).get(identifier)
+    if geometry is None:
+        raise ValueError("No hay un límite publicado para este lugar.")
+    polygons = [geometry["coordinates"]] if geometry["type"] == "Polygon" else geometry["coordinates"]
+    oriented = []
+    for polygon in polygons:
+        rings = []
+        for index, ring in enumerate(polygon):
+            area = sum(a[0]*b[1] - a[1]*b[0] for a, b in zip(ring, ring[1:]))
+            rings.append(ring if (area > 0) == (index == 0) else list(reversed(ring)))
+        oriented.append(rings)
+    return {"type": geometry["type"], "coordinates": oriented[0] if geometry["type"] == "Polygon" else oriented}
+
 
 def find_world_cities(query, language):
     payload, _ = request_json(

@@ -2,9 +2,10 @@
   import { translate } from '$lib/services/i18n.js';
   import { onMount } from 'svelte';
   import { Map } from 'maplibre-gl';
+  import { geoDistance } from 'd3-geo';
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { workspace, editVisual, selectGeometry } from '$lib/stores/workspace.js';
-  import { closedRegion, rectangle, coordinateLabel } from '$lib/services/geography.js';
+  import { addPolygonVertex, closedRegion, draftGeometry, nearPolygonStart, openPolygonNotice, rectangle, coordinateLabel } from '$lib/services/geography.js';
 
   let { tool, vertices = $bindable([]), cursor = $bindable(null), notice = $bindable(''), fallback } = $props();
   let container;
@@ -15,6 +16,7 @@
   let camera = $derived($workspace.visual.map.camera);
   let selectionVisible = $derived($workspace.visual.map.layers.selection);
   let features = $derived($workspace.data.geography.selection.features);
+  let draft = $derived(draftGeometry(vertices));
   const zoomOffset = 1.3;
   const layerSource = 'earth-selection';
 
@@ -48,9 +50,9 @@
       instance.addLayer({ id: 'earth-selection-fill', type: 'fill', source: layerSource,
         filter: ['==', '$type', 'Polygon'], paint: { 'fill-color': '#57dfc1', 'fill-opacity': 0.23 } });
       instance.addLayer({ id: 'earth-selection-line', type: 'line', source: layerSource,
-        paint: { 'line-color': '#78f8dc', 'line-width': 2 } });
+        paint: { 'line-color': ['case', ['has', 'draft'], '#f5bd77', '#78f8dc'], 'line-width': 2 } });
       instance.addLayer({ id: 'earth-selection-point', type: 'circle', source: layerSource,
-        filter: ['==', '$type', 'Point'], paint: { 'circle-color': '#f8c277', 'circle-radius': 5, 'circle-stroke-color': '#17263b', 'circle-stroke-width': 1.5 } });
+        filter: ['==', '$type', 'Point'], paint: { 'circle-color': '#f8c277', 'circle-radius': ['case', ['has', 'start'], 7, 5], 'circle-stroke-color': ['case', ['has', 'start'], '#fff', '#17263b'], 'circle-stroke-width': 1.5 } });
       ready = true;
     });
     instance.on('moveend', event => {
@@ -66,7 +68,21 @@
       const point = coordinates(event);
       if (!point) return;
       if (tool === 'point') selectGeometry('Point', point);
-      if (tool === 'polygon') vertices = [...vertices, point];
+      if (tool === 'polygon') {
+        if (vertices.length >= 3 && geoDistance(vertices[0], point) < Math.PI / 2) {
+          const first = instance.project(vertices[0]);
+          if (nearPolygonStart([first.x, first.y], event.point.x, event.point.y)) {
+            const ring = closedRegion(vertices);
+            if (ring) {
+              selectGeometry('Polygon', ring, 'Polígono');
+              vertices = [];
+              if (notice === openPolygonNotice) notice = '';
+            }
+            return;
+          }
+        }
+        vertices = addPolygonVertex(vertices, point);
+      }
       if (tool === 'rectangle') {
         if (!vertices.length) { vertices = [point]; return; }
         const ring = rectangle(vertices[0], point);
@@ -108,27 +124,21 @@
   $effect(() => {
     if (!ready || !map.getSource(layerSource)) return;
     const shown = selectionVisible ? [...features] : [];
-    if (vertices.length > 1) shown.push({
-      type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: vertices }
+    if (draft) shown.push({
+      type: 'Feature', properties: { draft: true }, geometry: draft
     });
-    for (const point of vertices) shown.push({
-      type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: point }
-    });
+    vertices.forEach((point, index) => shown.push({
+      type: 'Feature', properties: tool === 'polygon' && index === 0 ? { start: true } : {},
+      geometry: { type: 'Point', coordinates: point }
+    }));
     map.getSource(layerSource).setData(JSON.parse(JSON.stringify({ type: 'FeatureCollection', features: shown })));
     map.getCanvas().style.cursor = tool === 'pan' ? '' : 'crosshair';
   });
 
-  function finishPolygon() {
-    const ring = closedRegion(vertices);
-    if (!ring) { notice = 'Elegí al menos tres vértices que delimiten un área.'; return; }
-    selectGeometry('Polygon', ring, 'Polígono');
-    vertices = [];
-  }
 </script>
 
 <svelte:window onkeydown={event => {
-  if (event.key === 'Escape') vertices = [];
-  if (event.key === 'Enter' && event.target === map?.getCanvas() && tool === 'polygon') finishPolygon();
+  if (event.key === 'Escape' && tool !== 'polygon') vertices = [];
 }}/>
 
 <section class="map-panel">
@@ -144,10 +154,5 @@
     {:else if !ready}
       <div class="map-message" role="status">{$translate("Cargando cartografía mundial…")}</div>
     {/if}
-    <div class="world-actions">
-      {#if tool === 'polygon' && vertices.length}
-        <button class="outlined" disabled={vertices.length < 3} onclick={finishPolygon}>{$translate("Cerrar polígono")} ({vertices.length})</button>
-      {/if}
-    </div>
   </div>
 </section>

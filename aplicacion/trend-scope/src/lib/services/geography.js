@@ -1,4 +1,10 @@
-import { geoOrthographic, geoPath } from 'd3-geo';
+import { geoArea, geoOrthographic, geoPath } from 'd3-geo';
+
+export const openPolygonNotice = 'Cerrá el polígono haciendo clic cerca del primer punto.';
+
+export function nearPolygonStart(first, x, y) {
+  return Math.hypot(first[0] - x, first[1] - y) <= 12;
+}
 
 export const initialCamera = { longitude: -66, latitude: -26, zoom: 1 };
 export const wrapLongitude = longitude => ((longitude + 180) % 360 + 360) % 360 - 180;
@@ -44,12 +50,28 @@ export function rectangle(first, last) {
   return closedRegion([first, [last[0], first[1]], last, [first[0], last[1]]]);
 }
 
+export function draftGeometry(vertices) {
+  return vertices.length > 1 ? { type: 'LineString', coordinates: vertices } : null;
+}
+
+export function addPolygonVertex(vertices, point) {
+  if (vertices.some(([lon, lat]) => lon === point[0] && lat === point[1])) {
+    return vertices;
+  }
+  return [...vertices, point];
+}
+
 export function featurePath(projection, item) {
   const geometry = item.geometry;
-  // D3's spherical exterior winding is opposite to GeoJSON's.
-  const drawable = geometry.type === 'Polygon'
-    ? { ...geometry, coordinates: geometry.coordinates.map(ring => [...ring].reverse()) }
-    : geometry;
+  // Imported boundaries can wind in either direction. D3 expects small
+  // exteriors and complementary interiors on the sphere.
+  const orientPolygon = polygon => polygon.map((ring, index) => {
+    const complementary = geoArea({ type: 'Polygon', coordinates: [ring] }) > 2 * Math.PI;
+    return complementary === (index > 0) ? ring : [...ring].reverse();
+  });
+  const drawable = geometry.type === 'Polygon' ? { ...geometry, coordinates: orientPolygon(geometry.coordinates) }
+    : geometry.type === 'MultiPolygon' ? { ...geometry, coordinates: geometry.coordinates.map(orientPolygon) }
+      : geometry;
   return geoPath(projection)(drawable);
 }
 

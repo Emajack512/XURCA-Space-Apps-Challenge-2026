@@ -5,9 +5,10 @@
   import atlas from 'world-atlas/countries-110m.json';
   import { Compass, Crosshair, Layers } from '@lucide/svelte';
   import { workspace, editVisual, selectGeometry } from '$lib/stores/workspace.js';
-  import { makeProjection, positionAt, closedRegion, rectangle, featurePath, coordinateLabel, wrapLongitude, clampLatitude } from '$lib/services/geography.js';
+  import { makeProjection, positionAt, addPolygonVertex, closedRegion, draftGeometry, nearPolygonStart, openPolygonNotice, rectangle, featurePath, coordinateLabel, wrapLongitude, clampLatitude } from '$lib/services/geography.js';
 
   let { tool, vertices = $bindable([]), cursor = $bindable(null), notice = $bindable(''), showDetail } = $props();
+  let draft = $derived(draftGeometry(vertices));
   const land = feature(atlas, atlas.objects.land);
   const borders = mesh(atlas, atlas.objects.countries, (a, b) => a !== b);
   const grid = geoGraticule10();
@@ -51,7 +52,21 @@
     const point = pointerPosition(event);
     if (!point) return;
     if (tool === 'point') selectGeometry('Point', point);
-    if (tool === 'polygon') vertices = [...vertices, point];
+    if (tool === 'polygon') {
+      const bounds = canvas.getBoundingClientRect();
+      const first = vertices[0];
+      if (vertices.length >= 3 && path({ type: 'Point', coordinates: first })
+          && nearPolygonStart(projection(first), event.clientX - bounds.left, event.clientY - bounds.top)) {
+        const ring = closedRegion(vertices);
+        if (ring) {
+          selectGeometry('Polygon', ring, 'Polígono');
+          vertices = [];
+          if (notice === openPolygonNotice) notice = '';
+        }
+        return;
+      }
+      vertices = addPolygonVertex(vertices, point);
+    }
     if (tool === 'rectangle') {
       if (!vertices.length) {
         vertices = [point];
@@ -63,18 +78,8 @@
       vertices = [];
     }
   }
-  function finishPolygon() {
-    const ring = closedRegion(vertices);
-    if (!ring) {
-      notice = 'Elegí al menos tres vértices que delimiten un área.';
-      return;
-    }
-    selectGeometry('Polygon', ring, 'Polígono');
-    vertices = [];
-  }
   function keyboard(event) {
-    if (event.key === 'Escape') vertices = [];
-    if (event.key === 'Enter' && tool === 'polygon') finishPolygon();
+    if (event.key === 'Escape' && tool !== 'polygon') vertices = [];
     const directions = { ArrowLeft: [-8,0], ArrowRight: [8,0], ArrowUp: [0,8], ArrowDown: [0,-8] };
     if (directions[event.key]) {
       event.preventDefault();
@@ -112,16 +117,17 @@
           <path d={featurePath(projection, item)} class:map-point={item.geometry.type === 'Point'} class="map-selection"/>
         {/each}
       {/if}
-      {#if vertices.length > 1}<path d={path({ type:'LineString', coordinates:vertices })} class="map-draft"/>{/if}
-      {#each vertices as point}<path d={path({ type:'Point', coordinates:point })} class="map-point"/>{/each}
+      {#if draft}<path d={path(draft)} class="map-draft"/>{/if}
+      {#each vertices as point, index}
+        <path d={path({ type:'Point', coordinates:point })} class="map-point" class:polygon-start={tool === 'polygon' && index === 0}/>
+      {/each}
     </svg>
     <div class="map-top"><span class="map-pill"><span class="live-dot"></span> WGS 84</span><span class="map-pill">{coordinateLabel(cursor)}</span></div>
-    <div class="map-bottom">
-      <span>{$translate(tool === 'pan' ? 'Arrastrá para rotar · Rueda para acercar' : tool === 'point' ? 'Hacé clic sobre el globo para marcar un punto' : tool === 'rectangle' ? 'Marcá dos esquinas opuestas' : 'Marcá tres o más vértices')}</span>
-      {#if tool === 'polygon' && vertices.length}
-        <button onclick={finishPolygon} disabled={vertices.length < 3}>{$translate("Cerrar polígono")} ({vertices.length})</button>
-      {/if}
-    </div>
+    {#if tool !== 'polygon'}
+      <div class="map-bottom">
+        <span>{$translate(tool === 'pan' ? 'Arrastrá para rotar · Rueda para acercar' : tool === 'point' ? 'Hacé clic sobre el globo para marcar un punto' : 'Marcá dos esquinas opuestas')}</span>
+      </div>
+    {/if}
     <small class="map-credit">Natural Earth · 1:110m</small>
   </div>
   {#if $workspace.visual.workspace.layers}

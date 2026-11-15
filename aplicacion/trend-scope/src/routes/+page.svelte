@@ -1,7 +1,7 @@
 <script>
-  import { chartResolutions } from '$lib/services/charts.js';
+  import { chartCadences, chartResolutions } from '$lib/services/charts.js';
   import { saveChartImage } from '$lib/services/chartExport.js';
-  import { catalog } from '$lib/services/sources.js';
+  import { catalog, geographicEntityRoutes, geometryMatchesScope, sourceMatchesScope } from '$lib/services/sources.js';
   import { translate } from '$lib/services/i18n.js';
   import { onMount, tick } from 'svelte';
   import { Earth, Aperture, Bot, ChartNoAxesCombined, ChevronDown, CircleHelp, Crosshair, Hand, MapPin, Play, Scan, Hexagon, Settings, Settings2, Trash2, X, Save, FolderOpen } from '@lucide/svelte';
@@ -14,7 +14,7 @@
   import { workspace, defaults, editData, editVisual, selectGeometry } from '$lib/stores/workspace.js';
   import { loadWorkspace, saveWorkspace, downloadJson } from '$lib/services/configuration.js';
   import { acquireData } from '$lib/services/acquisition.js';
-  import { coordinateLabel, closedRegion, validCoordinates } from '$lib/services/geography.js';
+  import { coordinateLabel, closedRegion, openPolygonNotice, validCoordinates } from '$lib/services/geography.js';
   import '$lib/styles/dashboard.css';
 
   let detailedMap = $state(true);
@@ -106,17 +106,27 @@
       exporting = false;
     }
   }
-  function chooseTool(id) { tool = id; vertices = []; }
-  function clearSelection() { vertices = []; editData(data => data.geography.selection.features = []); }
+  function chooseTool(id) { tool = id; vertices = []; if (notice === openPolygonNotice) notice = ''; }
+  function clearSelection() { vertices = []; if (notice === openPolygonNotice) notice = ''; editData(data => data.geography.selection.features = []); }
   async function run() {
     if (running || storageBusy) return;
     const investigation = JSON.parse(configKey);
-    const point = investigation.geography.selection.features.filter(item => item.geometry.type === 'Point');
+    const { scope, selection } = investigation.geography;
     if (!investigation.sources.length) {
       notify('Agregá al menos una variable.');
       return;
     }
+    investigation.sources = investigation.sources.filter(source => sourceMatchesScope(source, scope, selection.features));
+    if (!investigation.sources.length) {
+      notify($translate('En Fuentes de información, elegí una variable compatible y pulsá Agregar.'));
+      return;
+    }
+    selection.features = selection.features.filter(item => geometryMatchesScope(item.geometry.type, scope));
+    const point = selection.features.filter(item => item.geometry.type === 'Point');
     for (const source of investigation.sources) {
+      if (geographicEntityRoutes.has(source.access) && !source.upstream.geometryId && selection.features.length === 1) {
+        source.upstream.geometryId = selection.features[0].id;
+      }
       if (!['nasa.power.monthly', 'openmeteo.archive.daily'].includes(source.access)) continue;
       if (point.some(item => item.id === source.upstream.geometryId)) continue;
       if (point.length !== 1) {
@@ -253,6 +263,11 @@
 
 <svelte:head><title>Earth Detective</title><meta name="description" content={$translate("Espacio de trabajo para explorar tendencias del sistema terrestre.")}/></svelte:head>
 <svelte:window onkeydown={event => {
+  if (tool === 'polygon' && vertices.length && !dialog?.open &&
+      ['Enter', 'Escape'].includes(event.key) && !event.target?.closest?.('input, textarea, select, button, [contenteditable]')) {
+    event.preventDefault();
+    notify(openPolygonNotice);
+  }
   if (event.key === 'Escape') menu = '';
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); save(); }
 }}/>
@@ -357,6 +372,12 @@
             {#each chartResolutions as [id, label]}<option value={id}>{$translate(label)}</option>{/each}
           </select>
         </label>
+        <label>{$translate('Frecuencia del gráfico')}
+          <select value={$workspace.visual.chartCadence ?? 'native'} onchange={event => editVisual(visual => visual.chartCadence = event.currentTarget.value)}>
+            {#each chartCadences as [id, label]}<option value={id}>{$translate(label)}</option>{/each}
+          </select>
+        </label>
+        <small>{$translate('Las series diarias se pueden agrupar. Se muestran solo semanas o meses completos y se conserva la frecuencia de las demás fuentes.')}</small>
       </div>
     {:else if modal === 'chart-export'}
       <form onsubmit={exportChart}>
