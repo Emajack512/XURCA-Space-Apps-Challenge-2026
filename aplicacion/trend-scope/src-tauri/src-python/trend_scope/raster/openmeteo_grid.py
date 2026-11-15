@@ -1,10 +1,40 @@
-"""ERA5 native centers, batched locations, no elevation downscaling."""
+"""ERA5 native centers, batched locations, no elevation downscaling.
+
+Quota (free tier, https://open-meteo.com/en/pricing): 600 calls/minute, 5000/hour, 10000/day. A request
+is counted as several calls when it covers several locations or more than two weeks, so the weighted
+cost is approximated as locations x ceil(days / 14). The connector refuses requests above
+MAX_WEIGHTED_CALLS (with a message on how much to shrink) and paces batches below the per-minute limit.
+"""
+import math
+import time
+from collections import deque
+
 import numpy as np
 from ..services.public_sources import request_json
 from .providers import times_for, check_size, make_field
 
-# Operational batch size, NOT the API maximum (1000 locations).
-BATCH_SIZE = 10
+DAYS_PER_CALL = 14                # Open-Meteo counts more than two weeks of data as extra calls
+MINUTE_BUDGET = 550               # stay under the 600 calls/minute free limit
+MAX_WEIGHTED_CALLS = 1100         # per grid request: the FWI asks 4 grids, 4 x 1100 < 5000 calls/hour
+_RECENT: deque = deque()          # (timestamp, weighted cost) of recent batches in this process
+
+
+def weighted_cost(n_cells: int, n_days: int) -> int:
+    return n_cells * max(1, math.ceil(n_days / DAYS_PER_CALL))
+
+
+def _pace(cost: int) -> None:
+    """Sleep until the batches of the last 60 s plus `cost` fit in MINUTE_BUDGET."""
+    while True:
+        now = time.monotonic()
+        while _RECENT and now - _RECENT[0][0] > 60:
+            _RECENT.popleft()
+        used = sum(item[1] for item in _RECENT)
+        if used + cost <= MINUTE_BUDGET or not _RECENT:
+            _RECENT.append((now, cost))
+            return
+        time.sleep(max(0.5, 60 - (now - _RECENT[0][0])))
+
 
 def fetch(request):
     w, s, e, n = request.bbox
@@ -12,11 +42,20 @@ def fetch(request):
     lons = np.arange(np.ceil(w * 4), np.floor(e * 4) + 1) / 4
     times = times_for(request)
     check_size(request, len(lats) * len(lons), len(times))
+    per_location = weighted_cost(1, len(times))
+    total = weighted_cost(len(lats) * len(lons), len(times))
+    if total > MAX_WEIGHTED_CALLS:
+        raise ValueError(f"La grilla de Open-Meteo costaría unas {total} llamadas de la cuota gratuita "
+                         f"({len(lats) * len(lons)} celdas × {len(times)} días); el máximo por pedido es "
+                         f"{MAX_WEIGHTED_CALLS}. Achicá el área o el período (por ejemplo, unos "
+                         f"{max(1, MAX_WEIGHTED_CALLS // per_location)} celdas para este período).")
     values = np.full((len(times), len(lats), len(lons)), np.nan)
     cells = [(i, j) for i in range(len(lats)) for j in range(len(lons))]
     urls, unit = [], None
-    for offset in range(0, len(cells), BATCH_SIZE):
-        batch = cells[offset:offset + BATCH_SIZE]
+    batch_size = max(1, min(100, MINUTE_BUDGET // per_location))
+    for offset in range(0, len(cells), batch_size):
+        batch = cells[offset:offset + batch_size]
+        _pace(weighted_cost(len(batch), len(times)))
         data, url = request_json("https://archive-api.open-meteo.com/v1/archive",
             "archive-api.open-meteo.com (revisá conexión y cuota; reintentá más tarde)",
             latitude=",".join(str(lats[i]) for i, j in batch),

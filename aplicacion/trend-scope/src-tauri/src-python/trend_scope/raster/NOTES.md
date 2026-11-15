@@ -19,6 +19,12 @@ El venv solicitado falla antes de importar código: `No Python at ...Python311/p
 
 Reparar el intérprete base del venv indicado o indicar otro Python autorizado. Luego ejecutar manual_check y resolver cualquier incompatibilidad real antes de integrar. Faltan confirmar límite regional POWER y regular cuotas Open-Meteo. No requiere cambios al contrato por ahora.
 
+## Integración (Claude, 2026-11-15, con autorización de Ema)
+
+- `manual_check` corrido con el venv del repo: **POWER regional OK** (T2M 2000–2024, San Luis: 300 × 5 × 4 celdas, 4,19–28,94 °C, cobertura 1,0). Fixture POWER generado.
+- **Open-Meteo devolvió HTTP 429** (límite por hora agotado: 81 celdas × 1 año ≈ 2 100 llamadas ponderadas para una sola variable). Se agregó a `openmeteo_grid.py`: costo ponderado = celdas × ⌈días / 14⌉, tope `MAX_WEIGHTED_CALLS` = 1100 por grilla (el FWI pide 4: 4 400 < 5 000/hora) con mensaje de cuánto achicar, lote dinámico y espera para no pasar 550 llamadas/minuto. La fórmula del costo es una aproximación de la página de precios, no un valor oficial exacto.
+- Pendiente: verificar Open-Meteo con datos reales cuando se libere la cuota.
+
 ## Pedidos a JP
 
 Ninguno.

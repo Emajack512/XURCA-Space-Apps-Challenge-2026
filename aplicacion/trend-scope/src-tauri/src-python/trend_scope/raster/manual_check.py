@@ -10,12 +10,12 @@ def main():
     folder = Path(__file__).with_name("fixtures")
     folder.mkdir(exist_ok=True)
     failures = []
-    for provider, variable, start, end, cadence in [
-        ("nasa.power.regional.monthly", "T2M", "2000-01-01", "2024-12-31", "monthly"),
-        ("openmeteo.era5.daily", "temperature_2m_mean", "2023-01-01", "2023-12-31", "daily")]:
+    # Open-Meteo uses a 0.5 x 0.5 degree box (9 ERA5 cells, ~243 weighted calls) to fit the free quota.
+    for provider, variable, start, end, cadence, bbox in [
+        ("nasa.power.regional.monthly", "T2M", "2000-01-01", "2024-12-31", "monthly", (-67., -35., -65., -33.)),
+        ("openmeteo.era5.daily", "temperature_2m_mean", "2023-01-01", "2023-12-31", "daily", (-66.5, -33.75, -66., -33.25))]:
         try:
-            field = fetch_grid(GridRequest(provider, variable, start, end, cadence,
-                                           (-67., -35., -65., -33.))).validate()
+            field = fetch_grid(GridRequest(provider, variable, start, end, cadence, bbox)).validate()
             metadata = asdict(field)
             arrays = {key: metadata.pop(key) for key in ("values", "lats", "lons", "mask")}
             np.savez_compressed(folder / (provider + ".npz"), **arrays)
