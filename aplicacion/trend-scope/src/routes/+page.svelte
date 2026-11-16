@@ -531,7 +531,9 @@
     {/if}
     {#if assistantVisible && mapVisible}<ResizeHandle label={$translate('Ancho del asistente')} value={panels.assistantWidth ?? 388} min={265} max={600} direction={-1} resize={value => editVisual(visual => visual.workspace.assistantWidth = value)}/>{/if}
     <aside class="assistant-panel" data-tour="assistant" hidden={!assistantVisible}>
-      <header class="panel-heading"><span><Bot size={16}/> {$translate('Asistente de IA')}</span></header>
+      <header class="panel-heading"><span><Bot size={16}/> {$translate('Asistente de IA')}</span>
+        <!-- Space Apps rules: AI-generated content must be identified as such. -->
+        <small class="ai-label" title="El texto del asistente lo genera un modelo de IA (Gemini). Los cálculos los hace el motor estadístico de la app.">{$translate('Respuestas generadas con IA')}</small></header>
       <Assistant series={currentSeries} {running} {storageBusy} {buildInvestigation} {regionReset} onreset={clearChatResults} oncancel={cancelRun}
         acquisitionError={acquisitionError?.key === configKey ? acquisitionError.message : ''}
         onprocess={() => run({ showChart: false, retry: true })} onresults={() => chartId = currentSeries[0]?.id ?? null}
@@ -642,6 +644,7 @@
   .map-results { display: flex; flex-direction: column; height: 100%; min-height: 0; padding: 8px; }
   .map-results > label { display: flex; align-items: center; gap: 8px; padding-bottom: 8px; }
   .map-results > label select { width: auto; max-width: 100%; }
+  .ai-label { margin-left: auto; color: var(--muted); font-size: 11px; font-weight: 400; }
   .selection-menu { z-index: 30; min-width: 260px; max-width: 340px; max-height: 360px; overflow: auto; }
   .selection-row { display: flex; align-items: center; gap: 6px; }
   .selection-row span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }

@@ -1,34 +1,58 @@
-# Earth Detective
+# TrendScope — aplicación de escritorio
 
-Primera versión de la aplicación de escritorio de XURCA para el desafío Earth System Trend Detective. El mapa detallado usa MapLibre y OpenFreeMap con datos de OpenStreetMap. Disponible con conexión y WebGL. El globo sin conexión usa Natural Earth a escala 1:110m. La app consulta NASA POWER, NOAA NCEI, SWOT Hydrocron y Open-Meteo (ERA5 y ERA5-Land) desde Python.
+App de escritorio (Tauri + SvelteKit + Python con PyTauri) para descargar datos ambientales públicos, graficarlos y analizar sus tendencias. Fuentes: NASA POWER, CHIRPS, PMRA, ERA5 y ERA5-Land (Open-Meteo / Copernicus), NOAA, SWOT, USGS y otras.
 
-## Ejecutar en Windows
+## Usar la app (sin instalar nada más)
 
-Con las dependencias preparadas, abrí **Iniciar Earth Detective.cmd**. En el panel derecho podés describir una investigación y pedir explicaciones con Gemini cuando el servicio del equipo está habilitado. Seguí la [guía del chat de IA](docs/chat-ia.md).
+Ejecutá el instalador `TrendScope_0.1.0_x64-setup.exe` (o el `.msi`). Trae su propio Python con todas las dependencias y, si hace falta, instala WebView2. No requiere Python, Node ni Rust en la PC. Necesita conexión a internet para consultar las fuentes de datos.
 
-Desde esta carpeta, con Node.js, pnpm, Rust con toolchain MSVC, Microsoft C++ Build Tools, WebView2 y una instalación de Python compatible con PyTauri:
+## Preparar el entorno de desarrollo (Windows)
+
+Requisitos: Node.js 20+, Rust con toolchain MSVC, Microsoft C++ Build Tools, WebView2 y Python 3.11–3.13.
+
+Desde esta carpeta (`aplicacion/trend-scope`):
 
 ```powershell
-pnpm install
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -e .\src-tauri
-$env:PYO3_PYTHON = (Get-Command python).Source
-pnpm tauri dev
+npm install                                  # dependencias de JavaScript (o pnpm install)
+python -m venv .venv                         # entorno de Python
+.\.venv\Scripts\python.exe -m pip install -e .\src-tauri   # dependencias de Python (numpy, scipy, statsmodels, rasterio…)
 ```
 
-Tauri 2.8.3 se fija por compatibilidad con PyTauri 0.8. El archivo Cargo.lock conserva las versiones de las dependencias indirectas.
+Las dependencias de Rust las descarga `cargo` la primera vez que se compila (versiones fijadas en `Cargo.lock`; Tauri 2.8.3 por compatibilidad con PyTauri 0.8).
 
-Para probar la interfaz en el navegador, usá `pnpm dev` y abrí `http://localhost:1420`. Este modo guarda la sesión en el almacenamiento del navegador. La aplicación nativa escribe `cfg_data.json` y `cfg_visual.json` en `%LOCALAPPDATA%\com.xurca.trend-scope`. El menú Proyecto permite guardar y recuperar ambos archivos. El menú Exportar permite descargar copias separadas.
+## Ejecutar en modo desarrollo
 
-## Consultar datos
+Doble clic en **Iniciar TrendScope.cmd**, o en PowerShell:
 
-1. En **Investigación**, elegí **Punto geográfico**, **Zona geográfica** o **Ambos**. Elegí o dibujá la geometría en el mapa, o buscá una localidad o provincia argentina en **Configuración geográfica**.
-2. Elegí el período y agregá una variable en **Fuentes de información**. La aplicación busca automáticamente los identificadores de estación de NOAA y los tramos o lagos de SWOT.
-3. Pulsá **Procesar** desde la app de escritorio.
-4. Explorá la serie y, cuando la fuente lo permita, el mapa del área. CHIRPS diario usa un archivo por día. Para períodos largos con frecuencia mensual, elegí **CHIRPS v3 · UCSB**.
-`pnpm check` comprueba el frontend y `pnpm build` genera `dist/`. Ambos son independientes del empaquetado de Python. Para distribución nativa consultá `scripts/README.md`.
+```powershell
+$env:VIRTUAL_ENV = (Resolve-Path .venv).Path; $env:PATH = "$env:VIRTUAL_ENV\Scripts;$env:PATH"
+.\node_modules\.bin\tauri.cmd dev
+```
 
-La interfaz usa D3 Geo y Natural Earth para el globo ortográfico, Chart.js para las gráficas y Lucide para los iconos. Las configuraciones base están en `config/`. Los recursos científicos del desafío están en `Memoria/General/Recursos_Earth_System_Trend_Detective.txt` desde la raíz del repositorio.
+En Linux: `source .venv/bin/activate && pnpm tauri dev`.
 
-Mirá [fuentes de datos](docs/fuentes-de-datos.md) para los requisitos de acceso y los campos de configuración.
+## Generar el instalador
+
+```powershell
+.\scripts\windows\download-py.ps1   # solo la primera vez: baja el Python que va dentro del instalador
+.\scripts\windows\build.ps1         # instala la app en ese Python y genera los instaladores
+```
+
+Los instaladores quedan en `target\bundle-release\bundle\nsis\` y `target\bundle-release\bundle\msi\`. Hay scripts equivalentes para Linux y macOS en `scripts/linux` y `scripts/macos`.
+
+## Configuración
+
+La app guarda `cfg_data.json` (consulta) y `cfg_visual.json` (apariencia) en `%LOCALAPPDATA%\com.xurca.trend-scope`. Los valores iniciales están en `config/`. El asistente de IA usa el servicio del equipo (`assistant-worker/`, Cloudflare Workers + Gemini).
+
+## Estructura
+
+| Carpeta | Contenido |
+|---|---|
+| `src/` | Interfaz (SvelteKit): mapa, panel de configuración, chat, gráficas, análisis estadístico y tutorial. |
+| `src-tauri/src/` | Contenedor de escritorio (Rust). |
+| `src-tauri/src-python/trend_scope/services/` | Descarga y preparación de datos de cada fuente. |
+| `src-tauri/src-python/trend_scope/handlers/` | Flujo de análisis: pedido → preparación → cálculo → respuesta. |
+| `src-tauri/src-python/trend_scope/models/` | Motor científico (tendencias, anomalías, sequía, cambios, extremos, pronóstico, regresión, FWI…). |
+| `src-tauri/src-python/trend_scope/raster/` | Conectores de grillas para los análisis sobre mapas. |
+| `assistant-worker/` | Servicio del asistente de IA. |
+| `scripts/` | Arranque en modo desarrollo y empaquetado. |

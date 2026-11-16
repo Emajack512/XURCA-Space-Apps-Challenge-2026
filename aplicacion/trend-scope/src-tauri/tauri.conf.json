@@ -8,7 +8,9 @@
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist",
-    "features": ["pytauri/standalone"]
+    "features": [
+      "pytauri/standalone"
+    ]
   },
   "app": {
     "windows": [
@@ -30,6 +32,9 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "shortDescription": "Tendencias de datos ambientales públicos",
+    "longDescription": "TrendScope descarga, grafica y analiza tendencias de datos ambientales públicos. NASA Space Apps 2026, equipo XURCA. Parte del código fue generado con asistencia de SI (Claude Code, Codex) y revisado por el equipo; el asistente de la app usa Gemini. Ver USO_DE_IA.md.",
+    "copyright": "Equipo XURCA (Acrux), 2026"
   }
 }

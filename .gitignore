@@ -1,0 +1,66 @@
+# Only the apps, their scripts and dependency manifests belong in the repository.
+# Everything below stays on each developer's PC; it is not needed to install or run the apps.
+
+# ── AI assistant memories and instructions (Claude, Codex, Cursor, …) ──
+CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
+SOUL.md
+.claude/
+.codex/
+.cursor/
+.cursorrules
+.aider*
+.continue/
+.windsurf/
+SUPERPROMPT*.md
+*PARA_IA*.txt
+Importante.md
+NOTES.md
+PRESERVATION.json
+
+# ── Planning notes, research material and team memory ──
+/Memoria/
+/docs/
+/aplicacion/trend-scope/docs/
+/CATALOGO_*.json
+/EARTH_DETECTIVE_VARIABLES_Y_RECURSOS.txt
+/Trend_Detective_*.xlsx
+/Trend_Detective_*.txt
+
+# ── Unnecessary READMEs (the root README and the app README stay) ──
+/aplicacion/trend-scope/src-tauri/README.md
+/aplicacion/trend-scope/src-tauri/src-python/trend_scope/raster/fixtures/README.md
+
+# ── Editor and CI templates that are not used ──
+.vscode/
+.idea/
+/aplicacion/trend-scope/.github/
+
+# ── Caches, builds and local environments ──
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+node_modules/
+.svelte-kit/
+dist/
+target/
+*.log
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Embedded Python for the installer (download it with scripts/*/download-py.*)
+/aplicacion/trend-scope/src-tauri/pyembed/
+
+# Local secrets
+.env
+.env.*
+!.env.example
+
+# npm lockfile (the project uses pnpm-lock.yaml)
+/aplicacion/trend-scope/package-lock.json

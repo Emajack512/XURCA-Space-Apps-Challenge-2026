@@ -296,6 +296,7 @@ const english = {
   "Preparación de los datos": "Data preparation",
   "Estado": "Status",
   "La configuración cambió después de este análisis. Volvé a ejecutarlo para actualizarlo.": "The settings changed after this analysis. Run it again to update it.",
+  "Respuestas generadas con IA": "AI-generated replies",
   "Cancelar": "Cancel",
   "Cancelar la consulta en curso": "Cancel the running request",
   "Consulta cancelada. Podés cambiar la configuración y volver a procesar.": "Request cancelled. You can change the settings and process again.",

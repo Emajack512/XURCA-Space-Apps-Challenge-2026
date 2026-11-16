@@ -1,11 +1,18 @@
 [package]
 name = "trend-scope"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "TrendScope: descarga, grafica y analiza tendencias de datos ambientales públicos (NASA Space Apps 2026, equipo XURCA)"
+authors = ["Equipo XURCA (Acrux)"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+# Declaración de uso de Súper Inteligencia (SI): ver USO_DE_IA.md en la raíz del repositorio.
+[package.metadata.ai-assistance]
+ai-generated-code = true
+tools = ["Claude Code (Anthropic)", "Codex (OpenAI)", "Gemini (Google) en el asistente de la app"]
+human-review = true
+disclosure = "USO_DE_IA.md"
 
 [lib]
 # The `_lib` suffix may seem redundant but it is necessary

@@ -1,10 +1,10 @@
 [project]
 name = "trend-scope"
 version = "0.1.0"
-description = "Add your description here"
+description = "Motor de datos y análisis estadístico de TrendScope (NASA Space Apps 2026, equipo XURCA)"
 readme = "README.md"
 authors = [
-    { name = "you" }
+    { name = "Equipo XURCA (Acrux)" }
 ]
 requires-python = ">=3.9"
 dependencies = [
@@ -45,3 +45,10 @@ find = { where = ["src-python"] }
 
 [tool.setuptools.package-data]
 "trend_scope.services" = ["source-coverage.json", "assistant-contract.json"]
+
+# Declaración de uso de Súper Inteligencia (SI): ver USO_DE_IA.md en la raíz del repositorio.
+[tool.trendscope.ai-assistance]
+ai-generated-code = true
+tools = ["Claude Code (Anthropic)", "Codex (OpenAI)", "Gemini (Google) en el asistente de la app"]
+human-review = true
+disclosure = "USO_DE_IA.md"

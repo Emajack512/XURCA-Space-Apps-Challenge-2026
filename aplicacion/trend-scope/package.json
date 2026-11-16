@@ -1,7 +1,13 @@
 {
   "name": "trend-scope",
   "version": "0.1.0",
-  "description": "",
+  "description": "TrendScope: descarga, grafica y analiza tendencias de datos ambientales públicos (NASA Space Apps 2026, equipo XURCA)",
+  "aiAssistance": {
+    "aiGeneratedCode": true,
+    "tools": ["Claude Code (Anthropic)", "Codex (OpenAI)", "Gemini (Google) en el asistente de la app"],
+    "humanReview": true,
+    "disclosure": "USO_DE_IA.md"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite dev",

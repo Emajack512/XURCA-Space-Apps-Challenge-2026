@@ -4,7 +4,7 @@ Set-Location -LiteralPath $earthAppRoot
 $earthPython = Join-Path $earthAppRoot '.venv\Scripts\python.exe'
 $earthTauri = Join-Path $earthAppRoot 'node_modules\.bin\tauri.cmd'
 if (!(Test-Path -LiteralPath $earthPython) -or !(Test-Path -LiteralPath $earthTauri)) {
-    throw 'Faltan dependencias. Consultá README.md para preparar Python y Node.'
+    throw 'Faltan dependencias. Seguí los pasos de README.md (sección «Preparar el entorno»).'
 }
 $env:VIRTUAL_ENV = Join-Path $earthAppRoot '.venv'
 $env:PYO3_PYTHON = $earthPython
