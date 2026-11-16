@@ -415,8 +415,12 @@
         }
         // The query is ready, but it only runs when the user reviews it and presses «Consultar estos datos».
         const readyToFetch = reply.readyToProcess === true && !analysis;
+        const requestedEnd = next?.data && settings.time?.end;
+        const trimmed = requestedEnd && next.data.time.end < requestedEnd;
         const status = [
           applied ? tr('Configuración aplicada.', 'Settings applied.') : '',
+          trimmed ? tr(`La fuente tiene datos hasta ${next.data.time.end}: el período se ajustó a ${next.data.time.start} – ${next.data.time.end}.`,
+            `The source has data until ${next.data.time.end}: the period was set to ${next.data.time.start} – ${next.data.time.end}.`) : '',
           readyToFetch ? tr('Revisá el período, el lugar y las variables abajo y pulsá Consultar estos datos.', 'Check the period, place and variables below and select Fetch this data.') : '',
           analysis ? tr('Revisá la propuesta: podés ejecutarla, o abrirla en el panel para cambiar el análisis o sumar variables.', 'Review the proposal: run it, or open it in the panel to change the analysis or add variables.') : ''
         ].filter(Boolean).join('\n');
@@ -442,7 +446,9 @@
       } else if (/Georef Argentina/i.test(reason)) {
         message = tr('No pude consultar el límite en Georef Argentina. Podés reintentar con el mismo mensaje.', 'I could not fetch the boundary from Georef Argentina. You can retry the same message.');
       }
-      messages.push({ role: 'assistant', text: message, temporary: true });
+      // App-side validation errors are plain Spanish sentences: show why the request failed instead of a generic message.
+      const detail = !quota && !/HTTP|conectar|Servicio de IA|propuesta inválida|Georef/i.test(reason) && reason.length < 300 ? reason : '';
+      messages.push({ role: 'assistant', text: message, status: detail ? tr('Motivo: ', 'Reason: ') + detail : '', temporary: true });
       failedQuestion = question;
     } finally {
       if (generation === started) {

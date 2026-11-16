@@ -245,11 +245,26 @@ export async function configureWorkspace(snapshot, changes, invoke, language, ad
       const { matches } = await invoke('evaluate_coverage', { variable: entry.variable, scope, start: data.time.start, end: data.time.end });
       const match = matches.find(row => row.access === source.access && row.variables.includes(entry.code)
         && (!entry.featureType || row.selection === entry.featureType));
-      if (!match || !['compatible', 'unverified'].includes(match.status)) {
-        throw new Error('El período o la selección no son compatibles con ' + entry.label + '.');
+      // Part of the period is outside the source (e.g. "hasta hoy" with a product that ends last year): keep the covered part.
+      const covered = match?.status === 'partial' && match.reason === 'partial_period' && match.from && match.through
+        ? { start: data.time.start > match.from ? data.time.start : match.from,
+            end: data.time.end < match.through ? data.time.end : match.through }
+        : null;
+      if (!match || (!['compatible', 'unverified'].includes(match.status) && !(covered && covered.start <= covered.end))) {
+        throw new Error('El período o la selección no son compatibles con ' + entry.label
+          + (match?.from && match?.through ? ` (datos de ${match.from} a ${match.through}).` : '.'));
       }
-      return match.cadence;
-    }));
+      return { cadence: match.cadence, covered };
+    })).then(rows => {
+      const ranges = rows.map(row => row?.covered).filter(Boolean);
+      if (ranges.length) {
+        const start = ranges.map(range => range.start).sort().at(-1);
+        const end = ranges.map(range => range.end).sort()[0];
+        if (start > end) throw new Error('Las variables elegidas no tienen datos en un período común.');
+        Object.assign(data.time, { start, end });
+      }
+      return rows.map(row => row?.cadence);
+    });
     if (cadences.includes('monthly')) data.time.resolution = 'Mensual';
     else if (cadences.includes('daily')) data.time.resolution = 'Diaria';
     else if (cadences.includes('overpass')) data.time.resolution = 'Por pasada';
