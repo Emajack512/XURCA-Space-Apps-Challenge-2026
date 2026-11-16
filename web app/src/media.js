@@ -4,8 +4,8 @@ export const media = {
   // Lo completaremos cuando la app esté publicada.
   downloadUrl: '',
 
-  // Enlace a un video demostrativo, si incorporamos uno.
-  demoVideoUrl: '',
+  // Video demostrativo en español.
+  demoVideoUrl: 'https://www.youtube.com/watch?v=LHPKDpGxjP8',
 
   // Redes oficiales del proyecto.
   instagramUrl: 'https://www.instagram.com/proyecto_acrux/'

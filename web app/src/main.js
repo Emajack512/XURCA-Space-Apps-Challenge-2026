@@ -17,6 +17,15 @@ const views = [...document.querySelectorAll('[data-view]')];
 const nav = document.querySelector('#navegacion');
 const menuToggle = document.querySelector('.menu-toggle');
 const mobile = window.matchMedia('(max-width: 760px)');
+const demoPlayer = document.querySelector('[data-demo-player]');
+
+if (demoPlayer && media.demoVideoUrl) {
+  const videoId = new URL(media.demoVideoUrl).searchParams.get('v');
+  if (/^[A-Za-z0-9_-]{11}$/.test(videoId ?? '')) {
+    demoPlayer.src = `https://www.youtube-nocookie.com/embed/${videoId}`;
+    demoPlayer.hidden = false;
+  }
+}
 
 function closeMenu() {
   nav.classList.remove('is-open');
