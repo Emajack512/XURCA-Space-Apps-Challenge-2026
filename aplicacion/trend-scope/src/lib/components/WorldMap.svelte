@@ -6,7 +6,7 @@
   import { geoDistance } from 'd3-geo';
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { workspace, editVisual, selectGeometry } from '$lib/stores/workspace.js';
-  import { addPolygonVertex, closedRegion, draftGeometry, nearPolygonStart, openPolygonNotice, rectangle, toMapZoom, fromMapZoom } from '$lib/services/geography.js';
+  import { addPolygonVertex, closedRegion, draftGeometry, nearPolygonStart, openPolygonNotice, rectangle, regionProblem, toMapZoom, fromMapZoom } from '$lib/services/geography.js';
 
   let { tool, vertices = $bindable([]), cursor = $bindable(null), notice = $bindable(''), fallback } = $props();
   let container;
@@ -95,9 +95,11 @@
             const ring = closedRegion(vertices);
             if (ring) {
               selectGeometry('Polygon', ring, 'Polígono');
-              vertices = [];
               if (notice === openPolygonNotice) notice = '';
+            } else {
+              notice = regionProblem(vertices) || 'Ese contorno no delimita un área válida.';
             }
+            vertices = [];
             return;
           }
         }

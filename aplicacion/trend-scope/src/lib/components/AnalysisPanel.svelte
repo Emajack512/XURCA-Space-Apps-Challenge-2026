@@ -1,17 +1,19 @@
 <script>
   import { onMount } from 'svelte';
-  import { FlaskConical, Play } from '@lucide/svelte';
+  import { FlaskConical, Play, Square } from '@lucide/svelte';
   import ForecastChart from './ForecastChart.svelte';
   import { listAnalyses } from '$lib/services/acquisition.js';
   import { executeAnalysis } from '$lib/services/analysisRunner.js';
-  import { analysisRun } from '$lib/stores/analysis.js';
+  import { analysisDraft, analysisRun } from '$lib/stores/analysis.js';
+  import { resolveTargets } from '$lib/services/analysisRunner.js';
   import { describeFinding, fmt, parameterValue, statusText, unit, verdictText } from '$lib/services/analysisText.js';
   import { catalog } from '$lib/services/sources.js';
   import { translate } from '$lib/services/i18n.js';
   import { workspace } from '$lib/stores/workspace.js';
 
   // buildInvestigation() returns the cfg_data to analyse (or null after notifying why not).
-  let { buildInvestigation, notify } = $props();
+  let { buildInvestigation, notify, opensettings = () => {} } = $props();
+  let runGeneration = 0;
 
   const PREPARATION = ['aggregate', 'min_coverage', 'gap_policy'];
   const HYPOTHESES = {
@@ -39,6 +41,38 @@
   onMount(async () => {
     try { catalogue = await listAnalyses(); } catch (error) { loadError = String(error.message ?? error); }
   });
+
+  // Variables removed from the configuration leave the selection; a single-variable analysis starts with the first one.
+  $effect(() => {
+    const ids = sources.map(source => source.id);
+    const kept = targets.filter(id => ids.includes(id));
+    if (kept.length !== targets.length) targets = kept;
+    if (!targets.length && ids.length && !multiple) targets = [ids[0]];
+  });
+
+  // A proposal from the assistant opens here to be reviewed or changed before running it.
+  $effect(() => {
+    const draft = $analysisDraft;
+    if (!draft || !catalogue) return;
+    analysisDraft.set(null);
+    if (!catalogue.analyses.some(item => item.struct_id === draft.struct)) return;
+    structId = draft.struct;
+    const max = catalogue.analyses.find(item => item.struct_id === draft.struct)?.targets.max ?? 1;
+    targets = resolveTargets(draft.targets ?? [], sources).filter(Boolean).slice(0, max);
+    values = Object.fromEntries(Object.entries(draft.params ?? {}).map(([name, value]) => [name,
+      Array.isArray(value) ? value.join(', ') : value]));
+    hypothesisKind = draft.hypothesis?.kind ?? '';
+    if (draft.hypothesis) {
+      const { kind, window, ...rest } = draft.hypothesis;
+      hypothesis = { ...hypothesis, ...rest, ...(window ? { start: window.start, end: window.end } : {}) };
+    }
+  });
+
+  function cancel() {
+    runGeneration++;
+    running = false;
+    notify('Análisis cancelado. Su resultado se va a descartar cuando termine.');
+  }
 
   function changeStruct(event) {
     structId = event.currentTarget.value;
@@ -83,7 +117,10 @@
     if (running || !struct) return;
     if (!struct.available) { notify(struct.reason ?? 'Este análisis no está disponible.'); return; }
     if (targets.length < struct.targets.min) {
-      notify(struct.targets.min > 1 ? `Elegí al menos ${struct.targets.min} variables.` : 'Elegí una variable.');
+      notify(sources.length < struct.targets.min
+        ? `Este análisis necesita ${struct.targets.min} variables y la configuración tiene ${sources.length}. Agregá más en Configuración o pedíselas al asistente.`
+        : struct.targets.min > 1 ? `Marcá al menos ${struct.targets.min} variables en la lista «Variables» de este panel.`
+          : 'Marcá la variable a analizar en la lista «Variable» de este panel.');
       return;
     }
     const params = {};
@@ -97,15 +134,15 @@
     if (body?.kind === 'forecast_threshold' && !Number.isFinite(body.value)) { notify('Indicá el valor del umbral.'); return; }
     const investigation = buildInvestigation();
     if (!investigation) return;
+    const generation = ++runGeneration;
     running = true;
-    analysisRun.set(null);
     try {
       await executeAnalysis(investigation, { struct: structId, targets: [...targets], params, hypothesis: body },
-        JSON.stringify($workspace.data));
+        JSON.stringify($workspace.data), () => generation === runGeneration);
     } catch (error) {
-      notify(String(error.message ?? error));
+      if (generation === runGeneration) notify(String(error.message ?? error));
     } finally {
-      running = false;
+      if (generation === runGeneration) running = false;
     }
   }
 </script>
@@ -138,8 +175,12 @@
                 <span>{label(source)}{multiple && position >= 0 ? ` · ${role(position)}` : ''}</span>
               </label>
             {:else}
-              <p class="quiet">{$translate('Agregá variables en la configuración.')}</p>
+              <p class="quiet">{$translate('Todavía no hay variables en la configuración.')}</p>
             {/each}
+            {#if sources.length < (struct.targets.max ?? 1)}
+              <p class="quiet">{multiple ? 'Para cruzar datos, agregá más variables a la investigación.' : ''}
+                <button type="button" class="outlined" onclick={opensettings}>{$translate('Agregar variables en Configuración')}</button></p>
+            {/if}
           </fieldset>
           <div class="analysis-params">
             {#each primary as [name, definition] (name)}
@@ -218,7 +259,14 @@
               </div>
             {/if}
           {/if}
-          <button class="primary" disabled={running || !struct.available}><Play size={15} fill="currentColor"/> {$translate(running ? 'Analizando…' : 'Analizar')}</button>
+          {#if running}
+            <span class="input-row">
+              <button class="primary" type="button" disabled><Play size={15} fill="currentColor"/> {$translate('Analizando…')}</button>
+              <button type="button" onclick={cancel}><Square size={13} fill="currentColor"/> {$translate('Cancelar')}</button>
+            </span>
+          {:else}
+            <button class="primary" disabled={!struct.available}><Play size={15} fill="currentColor"/> {$translate('Analizar')}</button>
+          {/if}
         {/if}
       </form>
     {/if}

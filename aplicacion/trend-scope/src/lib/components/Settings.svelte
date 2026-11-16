@@ -1,7 +1,7 @@
 <script>
   import { translate } from '$lib/services/i18n.js';
   import { SlidersHorizontal, ChevronDown, Plus, X, Database, CalendarDays, MapPin, Pencil, FlaskConical } from '@lucide/svelte';
-  import { workspace, editData } from '$lib/stores/workspace.js';
+  import { workspace, editData, removeSelections } from '$lib/stores/workspace.js';
   import PlaceSearch from './PlaceSearch.svelte';
   import { catalog, providers, sourceConfig, variableCategories, variableOptions, legacyInaClimateVariable, coverageProblem, geographicEntityRoutes, entityGeometries, providerMatchesScope, providerGeometries, geometryMatchesScope, sourceMatchesScope } from '$lib/services/sources.js';
   import { coordinateLabel } from '$lib/services/geography.js';
@@ -209,7 +209,7 @@
       <small>{item.geometry.type === 'Point' ? $translate('Punto WGS 84') : $translate('Zona geográfica')}</small>
     </div>{#if item.geometry.type === 'Point' || (item.geometry.type === 'Polygon' && item.geometry.coordinates.length === 1)}
       <button class="icon-button" aria-label={$translate("Editar coordenadas")} onclick={() => openCoordinates(item)}><Pencil size={14}/></button>
-    {/if}<button class="icon-button" aria-label={$translate("Eliminar selección")} onclick={() => editData(next => next.geography.selection.features = next.geography.selection.features.filter(feature => feature.id !== item.id))}><X size={14}/></button></div>
+    {/if}<button class="icon-button" aria-label={$translate("Eliminar selección")} onclick={() => removeSelections(feature => feature.id === item.id)}><X size={14}/></button></div>
   {/each}
   <button class="outlined" onclick={() => openCoordinates()}><MapPin size={14}/> {$translate("Ingresar coordenadas")}</button>
 {/snippet}

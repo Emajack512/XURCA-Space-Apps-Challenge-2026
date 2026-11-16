@@ -12,7 +12,7 @@
   import { providerGeometries } from '$lib/services/sources.js';
   import { addsToInvestigation, configureWorkspace } from '$lib/services/assistantConfiguration.js';
   import { executeAnalysis } from '$lib/services/analysisRunner.js';
-  import { analysisRun } from '$lib/stores/analysis.js';
+  import { analysisDraft, analysisRun } from '$lib/stores/analysis.js';
   import { prepareInvestigation } from '$lib/services/acquisition.js';
   import idleMascot from '$lib/assets/mascot/reposo.png';
   import thinkingMascot from '$lib/assets/mascot/pensando.png';
@@ -23,8 +23,9 @@
 
   let { series = [], running = false, storageBusy = false, acquisitionError = '',
     regionReset = 0, onprocess = () => {}, onresults = () => {}, onreset = () => {},
-    buildInvestigation = () => null, onanalysis = () => {} } = $props();
+    buildInvestigation = () => null, onanalysis = () => {}, oncancel = () => {} } = $props();
   let executing = $state(false);
+  let executionGeneration = 0;
   let digestFresh = $derived($analysisRun !== null && $analysisRun.key === JSON.stringify($workspace.data));
   let pendingArea = $state.raw(null);
   let failedQuestion = $state('');
@@ -158,17 +159,37 @@
     if (executing || busy || processing) return;
     const investigation = buildInvestigation();
     if (!investigation) return;
+    const current = ++executionGeneration;
     executing = true;
     try {
-      await executeAnalysis(investigation, message.analysis, JSON.stringify($workspace.data));
+      await executeAnalysis(investigation, message.analysis, JSON.stringify($workspace.data), () => current === executionGeneration);
+      if (current !== executionGeneration) return;
       message.executed = true;
       onanalysis();
     } catch (error) {
+      if (current !== executionGeneration) return;
       messages.push({ role: 'assistant', text: String(error.message ?? error), temporary: true });
       await scrollToLatest();
     } finally {
-      executing = false;
+      if (current === executionGeneration) executing = false;
     }
+  }
+
+  function cancelExecution() {
+    executionGeneration++;
+    executing = false;
+  }
+
+  /** Opens the proposed analysis in the statistical-analysis form so the user can change it before running it. */
+  function editProposal(message) {
+    analysisDraft.set(JSON.parse(JSON.stringify(message.analysis)));
+    onanalysis();
+  }
+
+  function fetchData(message) {
+    if (busy || processing) return;
+    message.fetchRequested = true;
+    onprocess();
   }
 
   async function scrollToLatest() {
@@ -199,10 +220,9 @@
     } else {
       workspace.set(proposal.next);
       configured = true;
+      // Nothing is fetched until the user reviews the query and presses the button.
       messages.push({ role: 'assistant', text: tr('Área confirmada: ', 'Area confirmed: ') + proposal.areas.map(area => area.name).join(', '),
-        analysis: proposal.analysis ?? null });
-      await tick();
-      if (proposal.ready && generation === started) void onprocess();
+        analysis: proposal.analysis ?? null, fetch: proposal.ready && generation === started });
     }
     await scrollToLatest();
   }
@@ -393,17 +413,16 @@
           if (JSON.stringify(next.data) !== JSON.stringify(snapshot.data)) configured = true;
           workspace.set(next);
         }
-        const autoProcess = reply.readyToProcess === true && !analysis;
+        // The query is ready, but it only runs when the user reviews it and presses «Consultar estos datos».
+        const readyToFetch = reply.readyToProcess === true && !analysis;
         const status = [
           applied ? tr('Configuración aplicada.', 'Settings applied.') : '',
-          analysis ? tr('Revisá la propuesta y pulsá Ejecutar análisis.', 'Review the proposal and select Run analysis.') : ''
+          readyToFetch ? tr('Revisá el período, el lugar y las variables abajo y pulsá Consultar estos datos.', 'Check the period, place and variables below and select Fetch this data.') : '',
+          analysis ? tr('Revisá la propuesta: podés ejecutarla, o abrirla en el panel para cambiar el análisis o sumar variables.', 'Review the proposal: run it, or open it in the panel to change the analysis or add variables.') : ''
         ].filter(Boolean).join('\n');
-        messages.push({ role: 'assistant', text: reply.message, analysis: analysis ?? null, status,
-          evidence: (series.length || digestFresh) && !autoProcess && !Object.keys(settings).length && !analysis ? original : null });
-        if (autoProcess) {
-          configured = true;
-          onprocess();
-        }
+        if (readyToFetch) configured = true;
+        messages.push({ role: 'assistant', text: reply.message, analysis: analysis ?? null, status, fetch: readyToFetch,
+          evidence: (series.length || digestFresh) && !readyToFetch && !Object.keys(settings).length && !analysis ? original : null });
         return;
       }
     } catch (error) {
@@ -482,14 +501,29 @@
         {/if}
         {#if message.status}<p class="quiet">{message.status}</p>{/if}
         {#if message.evidence && message.evidence !== JSON.stringify($workspace)}<p class="quiet">Esta explicación corresponde a una configuración anterior. Procesá la actual para actualizarla.</p>{/if}
+        {#if message.fetch && message === messages.findLast(item => item.fetch)}
+          <div class="message-actions">
+            <button class="primary" onclick={() => fetchData(message)} disabled={busy || processing || !prepared.investigation}>
+              {message.fetchRequested ? tr('Consultar de nuevo', 'Fetch again') : tr('Consultar estos datos', 'Fetch this data')}
+            </button>
+          </div>
+        {/if}
         {#if message.analysis}
-          <details open>
-            <summary>{tr('Análisis propuesto', 'Proposed analysis')}: {message.analysis.struct}</summary>
+          <details>
+            <summary>{tr('Análisis propuesto', 'Proposed analysis')}: {message.analysis.struct} · {message.analysis.targets?.join(', ')}</summary>
             <pre>{JSON.stringify(message.analysis, null, 2)}</pre>
           </details>
-          <button class="primary" onclick={() => runProposal(message)} disabled={executing || busy || processing}>
-            {executing ? tr('Analizando…', 'Analyzing…') : message.executed ? tr('Ejecutar de nuevo', 'Run again') : tr('Ejecutar análisis', 'Run analysis')}
-          </button>
+          <div class="message-actions">
+            {#if executing}
+              <button class="primary" disabled>{tr('Analizando…', 'Analyzing…')}</button>
+              <button onclick={cancelExecution}>{tr('Cancelar', 'Cancel')}</button>
+            {:else}
+              <button class="primary" onclick={() => runProposal(message)} disabled={busy || processing}>
+                {message.executed ? tr('Ejecutar de nuevo', 'Run again') : tr('Ejecutar análisis', 'Run analysis')}
+              </button>
+              <button onclick={() => editProposal(message)} disabled={busy}>{tr('Cambiar análisis o variables', 'Change analysis or variables')}</button>
+            {/if}
+          </div>
         {/if}
       </article>
     {/each}
@@ -528,6 +562,9 @@
     </div>
   {/if}
   <div class="actions">
+    {#if running}
+      <button onclick={oncancel}>{tr('Cancelar consulta', 'Cancel request')}</button>
+    {/if}
     {#if failedQuestion}
       <button onclick={event => send(event, failedQuestion, true)} disabled={busy || processing}>{tr('Reintentar consulta', 'Retry request')}</button>
     {/if}
@@ -564,6 +601,8 @@
   .prepared-question ul { margin:4px 0; padding-left:18px; }
   .actions { display: flex; gap: 6px; padding: 8px; flex-wrap: wrap; border-top: 1px solid var(--line); }
   .actions button, .example { font-size: 12px; }
+  .message-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .message-actions button { font-size: 12px; }
   .example { display: block; margin: 8px 0; text-align: left; width: 100%; white-space: normal; }
   .query-summary { display: grid; gap: 4px; margin: 0 8px 8px; padding: 8px; border: 1px solid var(--line); border-radius: 7px; max-height: 120px; overflow: auto; }
   .query-summary ul { margin: 0; padding-left: 18px; font-size: .88em; }

@@ -1,6 +1,6 @@
 import contract from '../../../src-tauri/src-python/trend_scope/services/assistant-contract.json' with { type: 'json' };
 import { assistantCatalog as catalog, sourceConfig, providerGeometries, geometryMatchesScope } from './sources.js';
-import { closedRegion, validCoordinates } from './geography.js';
+import { closedRegion, regionProblem, validCoordinates } from './geography.js';
 
 function checkShape(value, schema) {
   switch (schema.type) {
@@ -47,9 +47,10 @@ function validate(changes) {
     throw new Error('Indicá los países, el tramo y una distancia costera entre 1 y 500 km.');
   }
   if (point && !validCoordinates(point.longitude, point.latitude)) throw new Error('Las coordenadas están fuera del rango WGS 84.');
-  if (polygon && (polygon.length > 100 || !polygon.every(p => p.length === 2 && validCoordinates(...p)) || !closedRegion(polygon))) {
+  if (polygon && (polygon.length > 100 || !polygon.every(p => p.length === 2 && validCoordinates(...p)))) {
     throw new Error('El polígono requiere vértices válidos en orden longitud, latitud.');
   }
+  if (polygon && !closedRegion(polygon)) throw new Error(regionProblem(polygon) || 'El polígono no delimita un área válida.');
   if (sources && (sources.length > 25 || new Set(sources.map(item => JSON.stringify([item.id, item.geometryId ?? item.pointId ?? '']))).size !== sources.length)) {
     throw new Error('La lista de fuentes contiene variables duplicadas o excede el catálogo.');
   }
@@ -70,7 +71,8 @@ function configureSource(item, features, target, existing, scope) {
   const requested = reference ? features.find(feature => feature.id === reference) : target;
   const area = requested ? requested.geometry.type !== 'Point' : scope === 'area';
   const areaSources = { 'power-temperature': 'power-temperature-area', 'power-solar': 'power-solar-area' };
-  const sourceId = area ? areaSources[item.id] ?? item.id : item.id;
+  const pointSources = Object.fromEntries(Object.entries(areaSources).map(([point, region]) => [region, point]));
+  const sourceId = area ? areaSources[item.id] ?? item.id : pointSources[item.id] ?? item.id;
   const entry = catalog.find(source => source.id === sourceId);
   if (!entry) throw new Error('Una variable propuesta no está en el catálogo: ' + item.id);
   const config = sourceConfig(sourceId);
@@ -180,7 +182,17 @@ export async function configureWorkspace(snapshot, changes, invoke, language, ad
     const [longitude, latitude] = additions[0].center;
     Object.assign(visual.map.camera, { longitude, latitude });
   }
-  const requestedSources = changes.sources ?? (additive && newFeatures.length
+  // A new place replaces the previous selection unless the user asked to add it ("también", "además", "sumá"…).
+  // Otherwise the old place stayed on the map and the variables kept reading it.
+  if (!additive && newFeatures.length) {
+    const keep = new Set([...newFeatures.map(feature => feature.id),
+      ...(changes.sources ?? []).map(item => item.geometryId ?? item.pointId).filter(Boolean)]);
+    selection.features = selection.features.filter(feature => keep.has(feature.id));
+    for (const source of data.sources) {
+      if (!keep.has(source.upstream?.geometryId)) source.upstream.geometryId = null;
+    }
+  }
+  const requestedSources = changes.sources ?? (newFeatures.length
     ? [...new Set(data.sources.map(source => catalogEntry(source)?.id).filter(Boolean))].map(id => ({ id }))
     : null);
   if (requestedSources) {

@@ -5,7 +5,9 @@ import { providers, providerGeometries, geometryMatchesScope, sourceMatchesScope
 export function prepareInvestigation(data) {
   const investigation = JSON.parse(JSON.stringify(data));
   const { scope, selection } = investigation.geography;
-  if (!investigation.sources.length) throw new Error('Agregá al menos una variable.');
+  if (!investigation.sources.length) {
+    throw new Error('Todavía no hay variables. Agregá una en Configuración (botón de engranaje) o pedísela al asistente.');
+  }
   const { start, end } = investigation.time;
   const validDate = value => /^\d{4}-\d{2}-\d{2}$/.test(value)
     && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
@@ -25,11 +27,17 @@ export function prepareInvestigation(data) {
     const compatible = selection.features.filter(feature => geometries.includes(feature.geometry.type));
     const requested = source.upstream.geometryId;
     if (compatible.some(feature => feature.id === requested)) continue;
-    if (!requested && compatible.length === 1) {
+    // No binding, or a binding to a selection that was removed: use the only compatible one if there is exactly one.
+    if (compatible.length === 1) {
       source.upstream.geometryId = compatible[0].id;
       continue;
     }
-    throw new Error('Elegí una geometría de consulta compatible con ' + (source.product || source.variable) + '.');
+    const name = source.product || source.variable;
+    const kind = geometries.every(type => type === 'Point') ? 'un punto'
+      : geometries.includes('Point') ? 'un punto o un área' : 'un área (polígono)';
+    throw new Error(compatible.length
+      ? `Hay ${compatible.length} selecciones que sirven para ${name}. Elegí cuál usar en Configuración (botón de engranaje) o pedíselo al asistente.`
+      : `${name} necesita ${kind} en el mapa y no hay ninguna selección compatible.`);
   }
   return investigation;
 }

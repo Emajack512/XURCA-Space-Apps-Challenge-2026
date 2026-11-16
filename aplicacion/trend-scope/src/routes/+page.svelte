@@ -5,7 +5,7 @@
   import { catalog } from '$lib/services/sources.js';
   import { translate } from '$lib/services/i18n.js';
   import { onMount, tick } from 'svelte';
-  import { Earth, Aperture, Bot, Eraser, ChevronDown, CircleHelp, Crosshair, FlaskConical, Hand, MapPin, Play, Hexagon, Settings, Settings2, Trash2, X, Save, FolderOpen } from '@lucide/svelte';
+  import { Earth, Aperture, Bot, ChevronDown, CircleHelp, Crosshair, FlaskConical, Hand, MapPin, Play, Hexagon, Settings, Settings2, Square, Trash2, X, Save, FolderOpen } from '@lucide/svelte';
   import WorldMap from '$lib/components/WorldMap.svelte';
   import Globe from '$lib/components/Globe.svelte';
   import SettingsPanel from '$lib/components/Settings.svelte';
@@ -13,10 +13,10 @@
   import AnalysisPanel from '$lib/components/AnalysisPanel.svelte';
   import Assistant from '$lib/components/Assistant.svelte';
   import ResizeHandle from '$lib/components/ResizeHandle.svelte';
-  import { workspace, defaults, editData, editVisual, selectGeometry } from '$lib/stores/workspace.js';
+  import { workspace, defaults, editData, editVisual, selectGeometry, removeSelections } from '$lib/stores/workspace.js';
   import { loadWorkspace, saveWorkspace, downloadJson } from '$lib/services/configuration.js';
   import { acquireData, prepareInvestigation } from '$lib/services/acquisition.js';
-  import { coordinateLabel, closedRegion, openPolygonNotice, validCoordinates } from '$lib/services/geography.js';
+  import { coordinateLabel, closedRegion, openPolygonNotice, regionProblem, validCoordinates } from '$lib/services/geography.js';
   import '$lib/styles/dashboard.css';
 
   let detailedMap = $state(true);
@@ -41,6 +41,9 @@
   let result = $state(null);
   let chartId = $state(null);
   let analysisView = $state(false);
+  let analysisOpened = $state(false);
+  let selectionMenu = $state(false);
+  let runningGeometries = [];
   let acquisitionGeneration = 0;
   let regionReset = $state(0);
   let savedConfig = $state('');
@@ -139,17 +142,46 @@
     vertices = [];
     regionReset++;
     if (notice === openPolygonNotice) notice = '';
-    editData(data => {
-      const features = data.geography.selection.features;
-      const removed = new Set(features.filter(shouldRemove).map(feature => feature.id));
-      data.geography.selection.features = features.filter(feature => !removed.has(feature.id));
-      for (const source of data.sources) {
-        if (removed.has(source.upstream?.geometryId)) source.upstream.geometryId = null;
-      }
-    });
+    const removed = removeSelections(shouldRemove);
+    // A query that reads a selection the user just removed no longer answers anything useful.
+    if (running && removed.some(id => runningGeometries.includes(id))) {
+      cancelRun();
+      notify('Se canceló la consulta porque quitaste una selección que estaba usando.');
+    }
   }
-  function clearSelection() { removeMapSelections(() => true); }
-  function clearRegions() { removeMapSelections(feature => ['Polygon', 'MultiPolygon'].includes(feature.geometry.type)); }
+  function clearSelection() { selectionMenu = false; removeMapSelections(() => true); }
+  function removeFeature(id) { removeMapSelections(feature => feature.id === id); }
+  let selectionFeatures = $derived($workspace.data.geography.selection.features);
+  let selectedPoints = $derived(selectionFeatures.filter(feature => feature.geometry.type === 'Point'));
+  function featureLabel(feature, index) {
+    const name = feature.properties?.name?.trim();
+    const point = feature.geometry.type === 'Point';
+    const kind = $translate(point ? 'Punto' : 'Área');
+    return name ? kind + ' · ' + name
+      : kind + ' ' + (index + 1) + (point ? ' · ' + coordinateLabel(feature.geometry.coordinates) : '');
+  }
+  function joinPoints() {
+    const points = selectedPoints.map(feature => feature.geometry.coordinates);
+    if (points.length < 3) { notify('Marcá al menos tres puntos para unirlos en un polígono.'); return; }
+    // First the order in which the points were marked; if that outline crosses itself, sort them around their centre.
+    const center = points.reduce((sum, point) => [sum[0] + point[0] / points.length, sum[1] + point[1] / points.length], [0, 0]);
+    const angle = point => Math.atan2(point[1] - center[1], point[0] - center[0]);
+    const around = [...points].sort((a, b) => angle(a) - angle(b));
+    const ring = closedRegion(points) ?? closedRegion(around);
+    if (!ring) { notify(regionProblem(around) || 'Esos puntos no delimitan un área válida.'); return; }
+    const pointIds = selectedPoints.map(feature => feature.id);
+    removeMapSelections(feature => pointIds.includes(feature.id));
+    selectGeometry('Polygon', ring, 'Polígono de puntos');
+    selectionMenu = false;
+    notify('Los puntos se unieron en un polígono. Si tenías variables asignadas a esos puntos, asignalas a la nueva área.');
+  }
+  function cancelRun() {
+    if (!running) return;
+    acquisitionGeneration++;
+    running = false;
+    runningGeometries = [];
+    notify('Consulta cancelada. Podés cambiar la configuración y volver a procesar.');
+  }
 
   function clearChatResults() {
     acquisitionGeneration++;
@@ -171,7 +203,8 @@
     }
   }
 
-  function openAnalysis() { chartId = null; analysisView = true; }
+  function openAnalysis() { chartId = null; analysisView = true; analysisOpened = true; }
+  function openSettings() { chartId = null; analysisView = false; settingsOpen = true; }
 
   async function run({ showChart = true, retry = false } = {}) {
     if (running || storageBusy) return;
@@ -180,6 +213,7 @@
     analysisView = false;
     const startedWith = configKey;
     const generation = ++acquisitionGeneration;
+    runningGeometries = investigation.sources.map(source => source.upstream?.geometryId).filter(Boolean);
     running = true;
     acquisitionError = null;
     result = null;
@@ -218,7 +252,7 @@
       acquisitionError = { key: startedWith, message };
       notify(message);
     } finally {
-      if (generation === acquisitionGeneration) running = false;
+      if (generation === acquisitionGeneration) { running = false; runningGeometries = []; }
     }
   }
   async function save() {
@@ -296,7 +330,7 @@
         return;
       }
       const ring = closedRegion(points);
-      if (!ring) { modalError = 'Ingresá al menos tres vértices que delimiten un área.'; return; }
+      if (!ring) { modalError = regionProblem(points) || 'Ingresá al menos tres vértices que delimiten un área.'; return; }
       saveSelection('Polygon', ring, selectionName.trim());
       center = points[0];
     }
@@ -329,7 +363,7 @@
     event.preventDefault();
     notify(openPolygonNotice);
   }
-  if (event.key === 'Escape') menu = '';
+  if (event.key === 'Escape') { menu = ''; selectionMenu = false; }
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); save(); }
 }}/>
 
@@ -352,8 +386,27 @@
       {#each tools as [id,label,Icon]}
         <button class="tool-button" class:active={id === tool} aria-pressed={id === tool} title={$translate(label)} aria-label={$translate(label)} onclick={() => chooseTool(id)}><Icon size={17}/></button>
       {/each}
-      <button class="tool-button" title={$translate("Limpiar selecciones")} aria-label={$translate("Limpiar selecciones")} onclick={clearSelection}><Trash2 size={16}/></button>
-      <button class="tool-button" title={$translate("Limpiar regiones")} aria-label={$translate("Limpiar regiones")} onclick={clearRegions}><Eraser size={16}/></button>
+      <div class="menu-anchor">
+        <button class="tool-button" class:active={selectionMenu} aria-expanded={selectionMenu} title={$translate("Selecciones del mapa")} aria-label={$translate("Selecciones del mapa")} onclick={() => selectionMenu = !selectionMenu}><Trash2 size={16}/></button>
+        {#if selectionMenu}
+          <div class="dropdown selection-menu">
+            {#each selectionFeatures as feature, index (feature.id)}
+              <div class="selection-row">
+                <span title={featureLabel(feature, index)}>{featureLabel(feature, index)}</span>
+                <button class="icon-button" title={$translate('Eliminar selección')} aria-label={$translate('Eliminar selección')} onclick={() => removeFeature(feature.id)}><X size={14}/></button>
+              </div>
+            {:else}
+              <p class="quiet">{$translate('No hay selecciones en el mapa.')}</p>
+            {/each}
+            {#if selectedPoints.length >= 3}
+              <button onclick={joinPoints}><Hexagon size={14}/> {$translate('Unir los puntos en un polígono')}</button>
+            {/if}
+            {#if selectionFeatures.length}
+              <button onclick={clearSelection}><Trash2 size={14}/> {$translate('Borrar todas')}</button>
+            {/if}
+          </div>
+        {/if}
+      </div>
     </div>
     <div class="panel-buttons">
       <button class="tool-button" class:active={mapVisible} aria-pressed={mapVisible}
@@ -376,7 +429,11 @@
       {/each}
     </div>
     <div class="run-actions">
-      <button class="primary run" onclick={run} disabled={running}><Play size={15} fill="currentColor"/> {$translate(running ? 'Procesando…' : 'Procesar')}</button>
+      {#if running}
+        <button class="run" onclick={cancelRun} title={$translate('Cancelar la consulta en curso')}><Square size={13} fill="currentColor"/> {$translate('Cancelar')}</button>
+      {:else}
+        <button class="primary run" onclick={() => run()}><Play size={15} fill="currentColor"/> {$translate('Procesar')}</button>
+      {/if}
     </div>
   </div>
 
@@ -395,7 +452,7 @@
     {#if assistantVisible && mapVisible}<ResizeHandle label={$translate('Ancho del asistente')} value={panels.assistantWidth ?? 388} min={265} max={600} direction={-1} resize={value => editVisual(visual => visual.workspace.assistantWidth = value)}/>{/if}
     <aside class="assistant-panel" hidden={!assistantVisible}>
       <header class="panel-heading"><span><Bot size={16}/> {$translate('Asistente de IA')}</span></header>
-      <Assistant series={currentSeries} {running} {storageBusy} {buildInvestigation} {regionReset} onreset={clearChatResults}
+      <Assistant series={currentSeries} {running} {storageBusy} {buildInvestigation} {regionReset} onreset={clearChatResults} oncancel={cancelRun}
         acquisitionError={acquisitionError?.key === configKey ? acquisitionError.message : ''}
         onprocess={() => run({ showChart: false, retry: true })} onresults={() => chartId = currentSeries[0]?.id ?? null}
         onanalysis={openAnalysis}/>
@@ -416,8 +473,10 @@
     </div>
   {:else if activeChart}
     <div class="chart-workspace"><Results series={[activeChart]}/></div>
-  {:else if analysisVisible}
-    <div class="chart-workspace"><AnalysisPanel {buildInvestigation} {notify}/></div>
+  {/if}
+  {#if analysisOpened}
+    <!-- Kept mounted so the form survives switching to the map and back. -->
+    <div class="chart-workspace" hidden={!analysisVisible}><AnalysisPanel {buildInvestigation} {notify} opensettings={openSettings}/></div>
   {/if}
   </main>
 
@@ -491,4 +550,8 @@
   .map-results { display: flex; flex-direction: column; height: 100%; min-height: 0; padding: 8px; }
   .map-results > label { display: flex; align-items: center; gap: 8px; padding-bottom: 8px; }
   .map-results > label select { width: auto; max-width: 100%; }
+  .selection-menu { z-index: 30; min-width: 260px; max-width: 340px; max-height: 360px; overflow: auto; }
+  .selection-row { display: flex; align-items: center; gap: 6px; }
+  .selection-row span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+  .selection-menu .quiet { margin: 6px 8px; font-size: 12px; }
 </style>

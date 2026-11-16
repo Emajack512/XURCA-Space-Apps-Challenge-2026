@@ -11,7 +11,7 @@ export function resolveTargets(targets, sources) {
  * Runs one analysis through run_analysis and publishes the response in the analysisRun store.
  * `analysis` = { struct, targets, params?, hypothesis? } (from the form or from an assistant proposal).
  */
-export async function executeAnalysis(investigation, analysis, key) {
+export async function executeAnalysis(investigation, analysis, key, isCurrent = () => true) {
   const targets = resolveTargets(analysis.targets, investigation.sources);
   if (!targets.length || targets.some(target => !target)) {
     throw new Error('Las variables del análisis no están en la configuración actual. Agregalas y volvé a intentar.');
@@ -19,6 +19,7 @@ export async function executeAnalysis(investigation, analysis, key) {
   const item = { id: 'a1', struct: analysis.struct, targets, params: analysis.params ?? {},
     ...(analysis.hypothesis ? { hypothesis: analysis.hypothesis } : {}) };
   const response = await runAnalysis(analysisRequest(investigation, [item]));
-  analysisRun.set({ key, response });
+  // A cancelled run finishes in the background; its response is dropped.
+  if (isCurrent()) analysisRun.set({ key, response });
   return response;
 }

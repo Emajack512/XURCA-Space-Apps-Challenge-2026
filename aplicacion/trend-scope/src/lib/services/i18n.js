@@ -295,7 +295,30 @@ const english = {
   "Cómo se calculó": "How it was computed",
   "Preparación de los datos": "Data preparation",
   "Estado": "Status",
-  "La configuración cambió después de este análisis. Volvé a ejecutarlo para actualizarlo.": "The settings changed after this analysis. Run it again to update it."
+  "La configuración cambió después de este análisis. Volvé a ejecutarlo para actualizarlo.": "The settings changed after this analysis. Run it again to update it.",
+  "Cancelar": "Cancel",
+  "Cancelar la consulta en curso": "Cancel the running request",
+  "Consulta cancelada. Podés cambiar la configuración y volver a procesar.": "Request cancelled. You can change the settings and process again.",
+  "Se canceló la consulta porque quitaste una selección que estaba usando.": "The request was cancelled because you removed a selection it was using.",
+  "Análisis cancelado. Su resultado se va a descartar cuando termine.": "Analysis cancelled. Its result will be discarded when it finishes.",
+  "Selecciones del mapa": "Map selections",
+  "Eliminar selección": "Remove selection",
+  "No hay selecciones en el mapa.": "There are no selections on the map.",
+  "Unir los puntos en un polígono": "Join the points into a polygon",
+  "Borrar todas": "Remove all",
+  "Punto": "Point",
+  "Área": "Area",
+  "Marcá al menos tres puntos para unirlos en un polígono.": "Mark at least three points to join them into a polygon.",
+  "Esos puntos no delimitan un área válida.": "Those points do not enclose a valid area.",
+  "Los puntos se unieron en un polígono. Si tenías variables asignadas a esos puntos, asignalas a la nueva área.": "The points were joined into a polygon. If variables were assigned to those points, assign them to the new area.",
+  "Ese contorno no delimita un área válida.": "That outline does not enclose a valid area.",
+  "Marcá al menos tres vértices que delimiten un área.": "Mark at least three vertices that enclose an area.",
+  "El polígono se cruza consigo mismo. Dibujá el contorno sin que los lados se crucen.": "The polygon crosses itself. Draw the outline without crossing sides.",
+  "El polígono es demasiado angosto: cubriría muy pocas celdas de las grillas y el promedio no sería representativo. Dibujá un área más ancha.": "The polygon is too narrow: it would cover very few grid cells and its average would not be representative. Draw a wider area.",
+  "Todavía no hay variables. Agregá una en Configuración (botón de engranaje) o pedísela al asistente.": "There are no variables yet. Add one in Settings (gear button) or ask the assistant.",
+  "Todavía no hay variables en la configuración.": "There are no variables in the settings yet.",
+  "Agregar variables en Configuración": "Add variables in Settings",
+  "Marcá la variable a analizar en la lista «Variable» de este panel.": "Tick the variable to analyse in this panel's «Variable» list."
 };
 
 const language = derived(workspace, ({ visual }) => visual.language);

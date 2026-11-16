@@ -29,6 +29,48 @@ export function positionAt(projection, x, y) {
   return projection.invert([x, y]).map(value => Number(value.toFixed(5)));
 }
 
+// Shapes thinner than a ~1:60 strip touch too few grid cells for an area average.
+const minimumCompactness = 0.05;
+
+function segmentsCross([a, b], [c, d]) {
+  const side = (p, q, r) => Math.sign((q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]));
+  return side(a, b, c) * side(a, b, d) < 0 && side(c, d, a) * side(c, d, b) < 0;
+}
+
+/**
+ * Why a ring of vertices cannot be used as a query area, or '' when it can.
+ * Rejects self-crossing outlines ("bow ties", areas that fold over themselves) and very narrow strips.
+ */
+export function regionProblem(vertices) {
+  const points = vertices.filter((point, index) => {
+    const previous = vertices[index - 1];
+    return !previous || point[0] !== previous[0] || point[1] !== previous[1];
+  });
+  if (points.length > 1 && points[0][0] === points.at(-1)[0] && points[0][1] === points.at(-1)[1]) points.pop();
+  if (points.length < 3) return 'Marcá al menos tres vértices que delimiten un área.';
+  const meanLatitude = points.reduce((sum, point) => sum + point[1], 0) / points.length;
+  const scale = Math.cos(meanLatitude * Math.PI / 180);
+  const planar = points.map(([lon, lat]) => [lon * scale, lat]);
+  const edges = planar.map((point, index) => [point, planar[(index + 1) % planar.length]]);
+  for (let i = 0; i < edges.length; i++) {
+    for (let j = i + 2; j < edges.length; j++) {
+      if (i === 0 && j === edges.length - 1) continue;
+      if (segmentsCross(edges[i], edges[j])) {
+        return 'El polígono se cruza consigo mismo. Dibujá el contorno sin que los lados se crucen.';
+      }
+    }
+  }
+  const area = Math.abs(planar.reduce((sum, [x, y], index) => {
+    const [nextX, nextY] = planar[(index + 1) % planar.length];
+    return sum + x * nextY - nextX * y;
+  }, 0)) / 2;
+  const perimeter = edges.reduce((sum, [p, q]) => sum + Math.hypot(q[0] - p[0], q[1] - p[1]), 0);
+  if (!area || 4 * Math.PI * area / perimeter ** 2 < minimumCompactness) {
+    return 'El polígono es demasiado angosto: cubriría muy pocas celdas de las grillas y el promedio no sería representativo. Dibujá un área más ancha.';
+  }
+  return '';
+}
+
 export function closedRegion(vertices) {
   const points = vertices.filter((point, index) => {
     const previous = vertices[index - 1];
@@ -42,7 +84,7 @@ export function closedRegion(vertices) {
     const [nextX, nextY] = points[(index + 1) % points.length];
     return sum + x * nextY - nextX * y;
   }, 0);
-  if (points.length < 3 || Math.abs(signedArea) < 1e-10) return null;
+  if (points.length < 3 || Math.abs(signedArea) < 1e-10 || regionProblem(points)) return null;
   // GeoJSON exterior rings use counterclockwise order.
   if (signedArea < 0) points.reverse();
   return [[...points, points[0]]];

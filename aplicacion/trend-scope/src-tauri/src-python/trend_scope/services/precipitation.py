@@ -200,6 +200,10 @@ def fetch_precipitation(source, investigation, start, end):
     with ThreadPoolExecutor(max_workers=3) as pool:
         collect(zip(available, pool.map(load, available)))
     if len(failures) == len(available):
+        if daily and all("404" in failure for failure in failures):
+            # CHIRPS v3 daily "final" is published with a delay: recent days do not exist on the server yet.
+            raise ValueError("CHIRPS v3 diario todavía no publicó esos días (la versión final sale con semanas "
+                             "o meses de demora). Elegí un período más antiguo, o usá ERA5 para días recientes.")
         raise ValueError(f"No se pudieron leer los archivos de {product}. {failures[0]}")
     if all(value is None for value in values.values()):
         raise ValueError(f"{product} no devolvió celdas válidas para esa selección. Archivos con error: {len(failures)}.")
@@ -220,6 +224,8 @@ def fetch_precipitation(source, investigation, start, end):
         warnings.append(f"El catálogo tiene archivos para {len(available)} de {len(periods)} meses solicitados.")
     if failures:
         warnings.append(f"No se pudieron leer {len(failures)} de {len(available)} archivos de {product}.")
+        if daily and all("404" in failure for failure in failures):
+            warnings.append("Los últimos días todavía no fueron publicados por CHIRPS.")
     if warnings:
         result["mapMessage"] = " ".join(warnings)
     return result

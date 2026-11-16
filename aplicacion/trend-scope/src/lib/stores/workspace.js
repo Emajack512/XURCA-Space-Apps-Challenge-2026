@@ -21,4 +21,19 @@ export function selectGeometry(type, coordinates, name = '') {
     geometry: { type, coordinates: JSON.parse(JSON.stringify(coordinates)) }
   };
   editData(data => data.geography.selection.features.push(feature));
+  return feature.id;
+}
+
+/** Removes selections and unbinds every variable that pointed at them. */
+export function removeSelections(shouldRemove) {
+  let removed = [];
+  editData(data => {
+    const features = data.geography.selection.features;
+    removed = features.filter(shouldRemove).map(feature => feature.id);
+    data.geography.selection.features = features.filter(feature => !removed.includes(feature.id));
+    for (const source of data.sources) {
+      if (removed.includes(source.upstream?.geometryId)) source.upstream.geometryId = null;
+    }
+  });
+  return removed;
 }

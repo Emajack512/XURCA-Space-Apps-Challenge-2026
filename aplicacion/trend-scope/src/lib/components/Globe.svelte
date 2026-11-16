@@ -9,7 +9,7 @@
   import MapReadout from './MapReadout.svelte';
   import { workspace, editVisual, selectGeometry } from '$lib/stores/workspace.js';
   import { createGlobeTexture } from '$lib/services/globeTexture.js';
-  import { makeProjection, positionAt, addPolygonVertex, closedRegion, draftGeometry, nearPolygonStart, openPolygonNotice, rectangle, featurePath, wrapLongitude, clampLatitude } from '$lib/services/geography.js';
+  import { makeProjection, positionAt, addPolygonVertex, closedRegion, draftGeometry, nearPolygonStart, openPolygonNotice, rectangle, regionProblem, featurePath, wrapLongitude, clampLatitude } from '$lib/services/geography.js';
 
   let { tool, vertices = $bindable([]), cursor = $bindable(null), notice = $bindable(''), showDetail } = $props();
   let draft = $derived(draftGeometry(vertices));
@@ -85,9 +85,11 @@
         const ring = closedRegion(vertices);
         if (ring) {
           selectGeometry('Polygon', ring, 'Polígono');
-          vertices = [];
           if (notice === openPolygonNotice) notice = '';
+        } else {
+          notice = regionProblem(vertices) || 'Ese contorno no delimita un área válida.';
         }
+        vertices = [];
         return;
       }
       vertices = addPolygonVertex(vertices, point);
