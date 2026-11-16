@@ -13,7 +13,7 @@ export async function saveChartImage(canvas, filename, light) {
   const png = await new Promise((resolve, reject) => image.toBlob(
     blob => blob ? resolve(blob) : reject(new Error('Could not encode PNG.')), 'image/png'
   ));
-  if (!isTauri()) throw new Error('Open Earth Detective in desktop mode to export charts.');
+  if (!isTauri()) throw new Error('Open TrendScope in desktop mode to export charts.');
   const path = await save({
     defaultPath: filename,
     filters: [{ name: 'PNG', extensions: ['png'] }]

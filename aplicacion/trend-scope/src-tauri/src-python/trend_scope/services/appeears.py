@@ -62,7 +62,7 @@ def login():
     username = os.environ.get("EARTHDATA_USERNAME")
     password = os.environ.get("EARTHDATA_PASSWORD")
     if not username or not password:
-        raise ValueError("Configurá APPEEARS_TOKEN o las credenciales Earthdata antes de abrir Earth Detective.")
+        raise ValueError("Configurá APPEEARS_TOKEN o las credenciales Earthdata antes de abrir TrendScope.")
     basic = base64.b64encode(f"{username}:{password}".encode()).decode()
     token = read_json("login", headers={"Authorization": f"Basic {basic}"}, method="POST").get("token")
     if not token:

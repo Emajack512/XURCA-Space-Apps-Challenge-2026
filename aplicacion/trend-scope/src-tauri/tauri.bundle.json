@@ -11,6 +11,11 @@
     ],
     "resources": {
       "pyembed/python": "./"
+    },
+    "windows": {
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
+      }
     }
   }
 }

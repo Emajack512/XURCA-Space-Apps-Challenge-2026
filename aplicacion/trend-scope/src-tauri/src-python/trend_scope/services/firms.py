@@ -26,7 +26,7 @@ UNITS = {"frp": "MW", "brightness": "K", "bright_t31": "K", "bright_ti4": "K", "
 def fetch_firms(source, investigation, start, end):
     token = os.environ.get("FIRMS_MAP_KEY", "").strip()
     if not token:
-        raise ValueError("Configurá FIRMS_MAP_KEY antes de abrir Earth Detective.")
+        raise ValueError("Configurá FIRMS_MAP_KEY antes de abrir TrendScope.")
     upstream = source["upstream"]
     sensor = upstream.get("productId", "")
     if not re.fullmatch(r"[A-Z0-9_]+", sensor):

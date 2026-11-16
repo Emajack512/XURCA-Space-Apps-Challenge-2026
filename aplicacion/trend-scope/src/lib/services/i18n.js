@@ -282,7 +282,7 @@ const english = {
   "La fecha inicial debe ser anterior o igual a la final.": "The start date must be on or before the end date.",
   "Esta consulta admite resolución mensual.": "This query supports monthly resolution.",
   "No se pudo conectar con NASA POWER. Probá de nuevo.": "Could not connect to NASA POWER. Try again.",
-  "Abrí Earth Detective con pnpm tauri dev para consultar las fuentes.": "Open Earth Detective with pnpm tauri dev to fetch data.",
+  "Abrí TrendScope como app de escritorio para consultar las fuentes.": "Open TrendScope as a desktop app to fetch data.",
   "Análisis estadístico": "Statistical analysis",
   "Análisis estadístico…": "Statistical analysis…",
   "Analizar": "Analyze",

@@ -167,7 +167,8 @@ dialog p[role=alert]{color:var(--warning)}
 .map-message{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--panel);border:1px solid var(--line);padding:12px;border-radius:6px;text-align:center}
 .app-shell .maplibregl-ctrl button{padding:0}
 .app-shell .world-map .maplibregl-ctrl-attrib{background:#050911c7;color:#bbcede;font-size:9px;line-height:1.4}
-.app-shell .world-map .maplibregl-ctrl-attrib-button{display:none}
+.app-shell .world-map .maplibregl-ctrl-attrib.maplibregl-compact{min-height:20px}
+.app-shell .world-map .maplibregl-ctrl-attrib-button{opacity:.55}
 .app-shell .world-map .maplibregl-ctrl-attrib a{color:#c4d6e8}
 .csv-import{position:relative;display:inline-flex;align-items:center;padding:5px 8px;border:1px solid var(--line);border-radius:5px;color:var(--muted);cursor:pointer}.csv-import input{position:absolute;inset:0;opacity:0;cursor:pointer}.csv-import:focus-within{outline:2px solid var(--accent)}
 .topbar .top-icon{margin-left:auto}
@@ -211,15 +212,17 @@ dialog p[role=alert]{color:var(--warning)}
   .workspace-view .settings-panel,.workspace-view .assistant-panel{height:360px}
   .workspace-view .map-panel{height:300px}
 }
-.analysis-panel .results-scroll{padding:10px 14px}
-.analysis-form{display:grid;gap:10px;max-width:760px}
+.analysis-panel .results-scroll{padding:12px 16px;display:grid;grid-template-columns:minmax(340px,560px) minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:980px){.analysis-panel .results-scroll{grid-template-columns:minmax(0,1fr)}}
+.analysis-placeholder{display:grid;place-items:center;min-height:240px;border:1px dashed var(--line);border-radius:10px;color:var(--muted);text-align:center;padding:24px}
+.analysis-form{display:grid;gap:10px;min-width:0}
 .analysis-form label,.analysis-form fieldset{display:grid;gap:4px;color:var(--muted);font-size:.88em}
 .analysis-form fieldset{border:1px solid var(--line);border-radius:6px;padding:8px 10px;margin:0}
 .analysis-form label.check{display:flex;align-items:center;gap:8px;color:var(--text)}
 .analysis-params{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}
 .analysis-form details summary{cursor:pointer;color:var(--muted)}
 .analysis-error{color:var(--warning)}
-.analysis-output{margin-top:14px;max-width:900px}
+.analysis-output{min-width:0}
 .analysis-output .finding{padding:8px 0;border-top:1px solid #28394e}
 .analysis-output .finding p{margin:2px 0}
 .verdict{border-left:3px solid var(--faint);padding:4px 10px;margin:8px 0}
@@ -230,3 +233,6 @@ dialog p[role=alert]{color:var(--warning)}
 .forecast-table th:first-child,.forecast-table td:first-child{text-align:left}
 .chart-workspace .chart-canvas.forecast-canvas,.forecast-canvas{height:260px}
 .app-shell.light .analysis-output .finding,.app-shell.light .forecast-table th,.app-shell.light .forecast-table td{border-color:var(--line)}
+/* Missing setting: red glow that blinks three times (services/attention.js). */
+@keyframes needs-attention-pulse{0%,100%{box-shadow:0 0 0 0 #ff4d5e00}50%{box-shadow:0 0 0 3px #ff4d5ecc,0 0 14px 4px #ff4d5e88}}
+.needs-attention{animation:needs-attention-pulse .7s ease-in-out 3;border-radius:8px;outline:1px solid #ff4d5e}

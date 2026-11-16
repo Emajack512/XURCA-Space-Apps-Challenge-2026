@@ -1,23 +1,25 @@
 import { isTauri } from '@tauri-apps/api/core';
 import { pyInvoke } from 'tauri-plugin-pytauri-api';
 import { providers, providerGeometries, geometryMatchesScope, sourceMatchesScope } from './sources.js';
+import { settingError } from './attention.js';
 
 export function prepareInvestigation(data) {
   const investigation = JSON.parse(JSON.stringify(data));
   const { scope, selection } = investigation.geography;
   if (!investigation.sources.length) {
-    throw new Error('Todavía no hay variables. Agregá una en Configuración (botón de engranaje) o pedísela al asistente.');
+    throw settingError('Todavía no hay variables. Agregá una en Configuración (botón de engranaje) o pedísela al asistente.',
+      scope ? 'sources' : 'scope');
   }
   const { start, end } = investigation.time;
   const validDate = value => /^\d{4}-\d{2}-\d{2}$/.test(value)
     && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
   const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
   if (!validDate(start) || !validDate(end) || start > end || end > today) {
-    throw new Error('Elegí un período histórico con las fechas en orden.');
+    throw settingError('Elegí un período histórico con las fechas en orden.', 'time');
   }
   if (investigation.methods?.length) throw new Error('Los métodos personalizados todavía no se ejecutan desde Procesar.');
   investigation.sources = investigation.sources.filter(source => sourceMatchesScope(source, scope, selection.features));
-  if (!investigation.sources.length) throw new Error('En Fuentes de información, elegí una variable compatible y pulsá Agregar.');
+  if (!investigation.sources.length) throw settingError('En Fuentes de información, elegí una variable compatible y pulsá Agregar.', 'sources');
   selection.features = selection.features.filter(feature => geometryMatchesScope(feature.geometry.type, scope));
   for (const source of investigation.sources) {
     if (source.access === 'copernicus.cds' && source.upstream.selectors?.requestJson) continue;
@@ -35,15 +37,15 @@ export function prepareInvestigation(data) {
     const name = source.product || source.variable;
     const kind = geometries.every(type => type === 'Point') ? 'un punto'
       : geometries.includes('Point') ? 'un punto o un área' : 'un área (polígono)';
-    throw new Error(compatible.length
-      ? `Hay ${compatible.length} selecciones que sirven para ${name}. Elegí cuál usar en Configuración (botón de engranaje) o pedíselo al asistente.`
-      : `${name} necesita ${kind} en el mapa y no hay ninguna selección compatible.`);
+    throw compatible.length
+      ? settingError(`Hay ${compatible.length} selecciones que sirven para ${name}. Elegí cuál usar en Configuración (botón de engranaje) o pedíselo al asistente.`, 'sources')
+      : settingError(`${name} necesita ${kind} en el mapa y no hay ninguna selección compatible.`, 'geometry');
   }
   return investigation;
 }
 
 function requireDesktop(action) {
-  if (!isTauri()) throw new Error(`Abrí Earth Detective con pnpm tauri dev para ${action}.`);
+  if (!isTauri()) throw new Error(`Abrí TrendScope como app de escritorio para ${action}.`);
 }
 
 export async function acquireData(investigation) {

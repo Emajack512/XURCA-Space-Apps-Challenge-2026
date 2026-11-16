@@ -3,6 +3,7 @@
   import { onMount } from 'svelte';
   import { Map } from 'maplibre-gl';
   import MapReadout from './MapReadout.svelte';
+  import { attend } from '$lib/services/attention.js';
   import { geoDistance } from 'd3-geo';
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { workspace, editVisual, selectGeometry } from '$lib/stores/workspace.js';
@@ -52,7 +53,8 @@
         container, style: 'https://tiles.openfreemap.org/styles/' + (theme === 'light' ? 'positron' : 'dark'),
         center: [camera.longitude, camera.latitude], zoom: toMapZoom(camera.zoom),
         minZoom: toMapZoom(0.65), maxZoom: 18, maxPitch: 0, dragRotate: false, rollEnabled: false,
-        attributionControl: { compact: false }
+        // The tile licences (OpenStreetMap, EOX) require attribution: kept, but folded into the small (i) button.
+        attributionControl: { compact: true }
       });
     } catch {
       unavailable = true;
@@ -74,6 +76,8 @@
       instance.addLayer({ id: 'earth-selection-point', type: 'circle', source: layerSource,
         filter: ['==', '$type', 'Point'], paint: { 'circle-color': '#f8c277', 'circle-radius': ['case', ['has', 'start'], 7, 5], 'circle-stroke-color': ['case', ['has', 'start'], '#fff', '#17263b'], 'circle-stroke-width': 1.5 } });
       ready = true;
+      // Start with the attribution folded; the (i) button opens it.
+      container.querySelector('.maplibregl-compact-show')?.classList.remove('maplibregl-compact-show');
     });
     instance.on('moveend', event => {
       if (event.fromWorkspace) return;
@@ -172,10 +176,9 @@
   if (event.key === 'Escape' && tool !== 'polygon') vertices = [];
 }}/>
 
-<section class="map-panel">
+<section class="map-panel" use:attend={'map'}>
   <header class="panel-heading">
     <span>{$translate("Exploración geográfica")}</span>
-    <button class="outlined" aria-pressed={selectionVisible} onclick={() => editVisual(visual => visual.map.layers.selection = !selectionVisible)}>{$translate("Selecciones")}</button>
   </header>
   <div class="map-view globe-view" role="group" aria-label={$translate("Exploración geográfica")} onpointerleave={() => cursor = null}>
     <div class="world-map" bind:this={container}></div>

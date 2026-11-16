@@ -3,6 +3,8 @@
   import { SlidersHorizontal, ChevronDown, Plus, X, Database, CalendarDays, MapPin, Pencil, FlaskConical } from '@lucide/svelte';
   import { workspace, editData, removeSelections } from '$lib/stores/workspace.js';
   import PlaceSearch from './PlaceSearch.svelte';
+  import { attend, attention } from '$lib/services/attention.js';
+  import { revealSection } from '$lib/stores/tour.js';
   import { catalog, providers, sourceConfig, variableCategories, variableOptions, legacyInaClimateVariable, coverageProblem, geographicEntityRoutes, entityGeometries, providerMatchesScope, providerGeometries, geometryMatchesScope, sourceMatchesScope } from '$lib/services/sources.js';
   import { coordinateLabel } from '$lib/services/geography.js';
 
@@ -55,12 +57,21 @@
   }
   const set = (group, key, value) => editData(next => next[group][key] = value);
   const toggle = id => sections[id] = !sections[id];
+  // A flagged missing setting opens its section so the red glow is visible.
+  const flagNames = { sources: 'sources', time: 'time', geometry: 'geography' };
+  $effect(() => {
+    for (const target of $attention?.targets ?? []) if (flagNames[target]) sections[flagNames[target]] = true;
+  });
+  // The guided tour opens the section of the current step.
+  $effect(() => {
+    if ($revealSection) { sections[$revealSection] = true; revealSection.set(null); }
+  });
 </script>
 
 
 {#snippet group(id, label, icon, contents)}
   {@const Icon = icon}
-  <section class="setting-group">
+  <section class="setting-group" data-tour={id} use:attend={id === 'geography' ? 'geometry' : id}>
     <button class="section-toggle" onclick={() => toggle(id)} aria-expanded={!!sections[id]}><Icon size={15}/><span>{$translate(label)}</span><ChevronDown class={sections[id] ? '' : 'closed'} size={14}/></button>
     {#if sections[id]}<div class="section-content">{@render contents()}</div>{/if}
   </section>
@@ -79,7 +90,7 @@
 </section>
 
 {#snippet objective()}
-  <label>{$translate('Zona o punto geográfico')}
+  <label data-tour="scope" use:attend={'scope'}>{$translate('Zona o punto geográfico')}
     <select value={scope} onchange={event => set('geography', 'scope', event.currentTarget.value)}>
       <option disabled value="">{$translate('Elegí el alcance geográfico')}</option>
       <option value="point">{$translate('Punto geográfico')}</option>
@@ -211,7 +222,7 @@
       <button class="icon-button" aria-label={$translate("Editar coordenadas")} onclick={() => openCoordinates(item)}><Pencil size={14}/></button>
     {/if}<button class="icon-button" aria-label={$translate("Eliminar selección")} onclick={() => removeSelections(feature => feature.id === item.id)}><X size={14}/></button></div>
   {/each}
-  <button class="outlined" onclick={() => openCoordinates()}><MapPin size={14}/> {$translate("Ingresar coordenadas")}</button>
+  <button class="outlined" data-tour="coordinates-button" onclick={() => openCoordinates()}><MapPin size={14}/> {$translate("Ingresar coordenadas")}</button>
 {/snippet}
 
 {#snippet options(label,value,items,change)}

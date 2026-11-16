@@ -10,12 +10,29 @@
   import { catalog } from '$lib/services/sources.js';
   import { translate } from '$lib/services/i18n.js';
   import { workspace } from '$lib/stores/workspace.js';
+  import { attend, flag } from '$lib/services/attention.js';
+  import { analysisForm } from '$lib/stores/tour.js';
 
   // buildInvestigation() returns the cfg_data to analyse (or null after notifying why not).
   let { buildInvestigation, notify, opensettings = () => {} } = $props();
   let runGeneration = 0;
 
   const PREPARATION = ['aggregate', 'min_coverage', 'gap_policy'];
+  // Readable names for the parameter ids of the engine (the id is still shown as a tooltip).
+  const PARAM_LABELS = {
+    aggregate: 'Agregación', alpha: 'Nivel de significancia (α)', area_feature_id: 'Área', baseline: 'Período de referencia',
+    baseline_min_count: 'Mínimo de valores en la referencia', calibration: 'Calibración', components: 'Componentes',
+    confidence: 'Nivel de confianza', degree: 'Grado del polinomio', deseasonalize: 'Quitar el ciclo estacional',
+    direction: 'Dirección', gap_policy: 'Tratamiento de huecos', h: 'Umbral de alarma (h)', harmonics: 'Armónicos',
+    horizon: 'Horizonte del pronóstico', initial_train: 'Entrenamiento inicial', k: 'Tolerancia (k)', kind: 'Tipo',
+    lags: 'Rezagos', level: 'Nivel del intervalo', max_origins: 'Máximo de orígenes del backtest', method: 'Método',
+    min_coverage: 'Cobertura mínima', min_duration: 'Duración mínima', min_points: 'Mínimo de observaciones',
+    min_residuals: 'Mínimo de residuos', min_size: 'Tramo mínimo', min_skill: 'Mejora mínima exigida', mk_lag: 'Rezago de autocorrelación',
+    model: 'Modelo', n_points: 'Cantidad de puntos', penalty: 'Penalización', percentile: 'Percentil', period: 'Período',
+    q: 'Cuantil del umbral', scales: 'Escalas (meses)', size: 'Tamaño', trend_degree: 'Grado de la tendencia',
+    wet_threshold: 'Umbral de día lluvioso', window: 'Ventana'
+  };
+  const paramLabel = name => PARAM_LABELS[name] ?? name;
   const HYPOTHESES = {
     trend: 'Hay una tendencia', threshold: 'Se supera un umbral', change_point: 'Hay un cambio de régimen',
     relationship: 'Hay asociación', forecast_threshold: 'El pronóstico supera un umbral'
@@ -67,6 +84,9 @@
       hypothesis = { ...hypothesis, ...rest, ...(window ? { start: window.start, end: window.end } : {}) };
     }
   });
+
+  // Lets the guided tour know what is chosen in the form.
+  $effect(() => { analysisForm.set({ structId, targets: [...targets] }); });
 
   function cancel() {
     runGeneration++;
@@ -121,17 +141,18 @@
         ? `Este análisis necesita ${struct.targets.min} variables y la configuración tiene ${sources.length}. Agregá más en Configuración o pedíselas al asistente.`
         : struct.targets.min > 1 ? `Marcá al menos ${struct.targets.min} variables en la lista «Variables» de este panel.`
           : 'Marcá la variable a analizar en la lista «Variable» de este panel.');
+      flag('analysis-targets');
       return;
     }
     const params = {};
     for (const [name, definition] of Object.entries(struct.params)) {
       const value = parameterValue(definition, values[name]);
       if (value !== undefined) params[name] = value;
-      else if (definition.required) { notify(`Completá el parámetro obligatorio: ${name}.`); return; }
+      else if (definition.required) { notify(`Completá el parámetro obligatorio: ${paramLabel(name)}.`); flag('param:' + name); return; }
     }
     const body = hypothesisBody();
-    if (body?.kind === 'threshold' && !Number.isFinite(body.value)) { notify('Indicá el valor del umbral.'); return; }
-    if (body?.kind === 'forecast_threshold' && !Number.isFinite(body.value)) { notify('Indicá el valor del umbral.'); return; }
+    if (body?.kind === 'threshold' && !Number.isFinite(body.value)) { notify('Indicá el valor del umbral.'); flag('hypothesis-value'); return; }
+    if (body?.kind === 'forecast_threshold' && !Number.isFinite(body.value)) { notify('Indicá el valor del umbral.'); flag('hypothesis-value'); return; }
     const investigation = buildInvestigation();
     if (!investigation) return;
     const generation = ++runGeneration;
@@ -156,7 +177,7 @@
       <p class="quiet">{$translate('Cargando análisis…')}</p>
     {:else}
       <form class="analysis-form" onsubmit={event => { event.preventDefault(); run(); }}>
-        <label>{$translate('Análisis')}
+        <label data-tour="analysis-struct">{$translate('Análisis')}
           <select value={structId} onchange={changeStruct}>
             {#each catalogue.analyses as item (item.struct_id)}
               <option value={item.struct_id} disabled={!item.available}>{item.title}{item.available ? '' : ' — no disponible'}</option>
@@ -166,7 +187,7 @@
         {#if struct}
           <p class="quiet">{struct.description}</p>
           {#if !struct.available}<p class="analysis-error">{struct.reason}</p>{/if}
-          <fieldset>
+          <fieldset data-tour="analysis-targets" use:attend={'analysis-targets'}>
             <legend>{multiple ? `Variables (${struct.targets.min} a ${struct.targets.max}, en orden: antecede, respuesta, controles)` : 'Variable'}</legend>
             {#each sources as source (source.id)}
               {@const position = targets.indexOf(source.id)}
@@ -184,7 +205,7 @@
           </fieldset>
           <div class="analysis-params">
             {#each primary as [name, definition] (name)}
-              <label>{name}{definition.required ? ' *' : ''}{definition.provisional ? ' (provisional)' : ''}
+              <label title={name} use:attend={'param:' + name}>{paramLabel(name)}{definition.required ? ' *' : ''}{definition.provisional ? ' (provisional)' : ''}
                 {#if definition.type === 'bool'}
                   <input type="checkbox" checked={values[name] ?? definition.default} onchange={event => values[name] = event.currentTarget.checked}/>
                 {:else if definition.choices?.length}
@@ -213,7 +234,7 @@
               <summary>{$translate('Preparación de los datos')}</summary>
               <div class="analysis-params">
                 {#each preparation as [name, definition] (name)}
-                  <label>{name}
+                  <label title={name}>{paramLabel(name)}
                     {#if definition.choices?.length}
                       <select value={values[name] ?? definition.default} onchange={event => values[name] = event.currentTarget.value}>
                         {#each definition.choices as choice}<option value={choice}>{choice}</option>{/each}
@@ -248,7 +269,7 @@
                   <label>Paso del pronóstico<input type="number" min="1" step="1" bind:value={hypothesis.at_step}/></label>
                 {/if}
                 <label>Operador<select bind:value={hypothesis.operator}><option>&gt;</option><option>&lt;</option><option>&gt;=</option><option>&lt;=</option></select></label>
-                <label>Valor<input type="number" step="any" bind:value={hypothesis.value}/></label>
+                <label use:attend={'hypothesis-value'}>Valor<input type="number" step="any" bind:value={hypothesis.value}/></label>
               </div>
             {:else if hypothesisKind === 'relationship'}
               <label>Signo esperado<select bind:value={hypothesis.sign}><option value="any">cualquiera</option><option value="positive">positivo</option><option value="negative">negativo</option></select></label>
@@ -265,14 +286,16 @@
               <button type="button" onclick={cancel}><Square size={13} fill="currentColor"/> {$translate('Cancelar')}</button>
             </span>
           {:else}
-            <button class="primary" disabled={!struct.available}><Play size={15} fill="currentColor"/> {$translate('Analizar')}</button>
+            <button class="primary" data-tour="analysis-run" disabled={!struct.available}><Play size={15} fill="currentColor"/> {$translate('Analizar')}</button>
           {/if}
         {/if}
       </form>
     {/if}
 
-    {#if response}
-      <section class="analysis-output" aria-live="polite">
+    {#if !response}
+      <div class="analysis-placeholder" data-tour="analysis-output"><p>{$translate('Elegí el análisis y la variable, y pulsá Analizar. Los resultados aparecen acá.')}</p></div>
+    {:else}
+      <section class="analysis-output" data-tour="analysis-output" aria-live="polite">
         {#if stale}<p class="analysis-error">{$translate('La configuración cambió después de este análisis. Volvé a ejecutarlo para actualizarlo.')}</p>{/if}
         <p><strong>{$translate('Estado')}:</strong> {statusText(response.status)}</p>
         {#each response.errors as item}<p class="analysis-error">{item.message}</p>{/each}

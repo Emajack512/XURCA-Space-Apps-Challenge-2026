@@ -13,6 +13,7 @@
   import { addsToInvestigation, configureWorkspace } from '$lib/services/assistantConfiguration.js';
   import { executeAnalysis } from '$lib/services/analysisRunner.js';
   import { analysisDraft, analysisRun } from '$lib/stores/analysis.js';
+  import { chatDraft } from '$lib/stores/tour.js';
   import { prepareInvestigation } from '$lib/services/acquisition.js';
   import idleMascot from '$lib/assets/mascot/reposo.png';
   import thinkingMascot from '$lib/assets/mascot/pensando.png';
@@ -42,6 +43,10 @@
   let generation = 0;
   $effect(() => {
     if (regionReset) pendingArea = null;
+  });
+  // The guided tour writes an example request; the user only presses Send.
+  $effect(() => {
+    if ($chatDraft) { draft = $chatDraft; chatDraft.set(null); }
   });
 
   function resetChat() {
@@ -586,7 +591,7 @@
     <textarea aria-label={tr('Mensaje', 'Message')} placeholder={tr('Escribí un mensaje…', 'Write a message…')}
       maxlength="1200" rows="4" bind:value={draft}
       onkeydown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }}></textarea>
-    <button type="submit" class="primary" disabled={busy || processing || !draft.trim()} aria-label={tr('Enviar mensaje', 'Send message')}>
+    <button type="submit" class="primary" data-tour="chat-send" disabled={busy || processing || !draft.trim()} aria-label={tr('Enviar mensaje', 'Send message')}>
       <Send size={16}/>
     </button>
   </form>

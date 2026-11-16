@@ -5,7 +5,7 @@
   import { catalog } from '$lib/services/sources.js';
   import { translate } from '$lib/services/i18n.js';
   import { onMount, tick } from 'svelte';
-  import { Earth, Aperture, Bot, ChevronDown, CircleHelp, Crosshair, FlaskConical, Hand, MapPin, Play, Hexagon, Settings, Settings2, Square, Trash2, X, Save, FolderOpen } from '@lucide/svelte';
+  import { Earth, Bot, ChevronDown, CircleHelp, Crosshair, FlaskConical, Hand, MapPin, Play, Hexagon, Settings, Settings2, Square, Trash2, X, Save, FolderOpen } from '@lucide/svelte';
   import WorldMap from '$lib/components/WorldMap.svelte';
   import Globe from '$lib/components/Globe.svelte';
   import SettingsPanel from '$lib/components/Settings.svelte';
@@ -13,10 +13,16 @@
   import AnalysisPanel from '$lib/components/AnalysisPanel.svelte';
   import Assistant from '$lib/components/Assistant.svelte';
   import ResizeHandle from '$lib/components/ResizeHandle.svelte';
+  import Tutorial from '$lib/components/Tutorial.svelte';
+  import { EXAMPLE, LEVELS } from '$lib/services/tutorialSteps.js';
+  import { chatDraft, analysisForm, loadTutorial, saveTutorial } from '$lib/stores/tour.js';
+  import { analysisDraft } from '$lib/stores/analysis.js';
+  import { sourceConfig } from '$lib/services/sources.js';
   import { workspace, defaults, editData, editVisual, selectGeometry, removeSelections } from '$lib/stores/workspace.js';
   import { loadWorkspace, saveWorkspace, downloadJson } from '$lib/services/configuration.js';
   import { acquireData, prepareInvestigation } from '$lib/services/acquisition.js';
   import { coordinateLabel, closedRegion, openPolygonNotice, regionProblem, validCoordinates } from '$lib/services/geography.js';
+  import { attend, flag } from '$lib/services/attention.js';
   import '$lib/styles/dashboard.css';
 
   let detailedMap = $state(true);
@@ -44,6 +50,11 @@
   let analysisOpened = $state(false);
   let selectionMenu = $state(false);
   let runningGeometries = [];
+  // Guided tour: null (closed), 'welcome' or 'tour'. The level persists in localStorage.
+  let tutorial = $state(null);
+  let tutorialLevel = $state('novice');
+  let tutorialKey = $state(0);
+  let tourPrefill = $state(false);
   let acquisitionGeneration = 0;
   let regionReset = $state(0);
   let savedConfig = $state('');
@@ -94,6 +105,9 @@
       const saved = await loadWorkspace();
       if (saved) workspace.set({ ...defaults(), ...Object.fromEntries(Object.entries(saved).filter(([, value]) => value != null)) });
       savedConfig = JSON.stringify($workspace);
+      const stored = loadTutorial();
+      if (stored?.level) tutorialLevel = stored.level;
+      if (!stored) tutorial = 'welcome';
     } catch (error) {
       notify($translate('No se pudo recuperar la configuración.') + ' ' + $translate(String(error.message ?? error)));
     } finally { storageBusy = false; }
@@ -199,8 +213,19 @@
       return prepareInvestigation($workspace.data);
     } catch (error) {
       notify($translate(error.message));
+      if (error.field) showMissingSetting(error.field);
       return null;
     }
+  }
+
+  // Opens the settings where the missing value goes and makes that place glow red with a short beep.
+  async function showMissingSetting(field) {
+    chartId = null;
+    analysisView = false;
+    settingsOpen = true;
+    if (field === 'geometry' && !mapVisible) editVisual(visual => visual.workspace.map = true);
+    await tick();
+    flag(field, 'settings-button', ...(field === 'geometry' ? ['map'] : []));
   }
 
   function openAnalysis() { chartId = null; analysisView = true; analysisOpened = true; }
@@ -296,6 +321,12 @@
     polygonInput = feature?.geometry.type === 'Polygon'
       ? feature.geometry.coordinates[0].slice(0, -1).map(point => point.join(', ')).join('\n')
       : '';
+    tourPrefill = !feature && tutorial === 'tour';
+    if (tourPrefill) {
+      selectionName = EXAMPLE.place;
+      longitude = String(EXAMPLE.longitude);
+      latitude = String(EXAMPLE.latitude);
+    }
     return showDialog('coordinates');
   }
 
@@ -342,22 +373,71 @@
     dialog.close();
     notify('Selección geográfica actualizada');
   }
+  // ── Guided tour ──
+  let tourState = $derived({ data: $workspace.data, settingsOpen, running, analysisVisible,
+    hasResults: currentSeries.length > 0, form: $analysisForm });
+
+  function examplePointId() {
+    const features = $workspace.data.geography.selection.features;
+    return features.find(feature => feature.geometry.type === 'Point' && feature.properties?.name === EXAMPLE.place)?.id
+      ?? features.find(feature => feature.geometry.type === 'Point')?.id;
+  }
+  const tourApi = {
+    openSettings: () => { chartId = null; analysisView = false; settingsOpen = true; },
+    setScope: scope => { tourApi.openSettings(); editData(data => data.geography.scope = scope); },
+    addExamplePoint: () => {
+      tourApi.setScope('point');
+      if (!examplePointId()) selectGeometry('Point', [EXAMPLE.longitude, EXAMPLE.latitude], EXAMPLE.place);
+      editVisual(visual => Object.assign(visual.map.camera, { longitude: EXAMPLE.longitude, latitude: EXAMPLE.latitude }));
+    },
+    setPeriod: (start, end) => editData(data => { Object.assign(data.time, { start, end, resolution: 'Mensual' }); delete data.time.years; }),
+    // Every "do it for me" leaves the whole example ready up to that step, so levels that skip steps still work.
+    addExampleSource: () => {
+      tourApi.addExamplePoint();
+      tourApi.setPeriod(EXAMPLE.start, EXAMPLE.end);
+      const geometryId = examplePointId();
+      editData(data => {
+        if (data.sources.some(source => source.id.split('::')[0] === EXAMPLE.sourceId)) return;
+        const source = sourceConfig(EXAMPLE.sourceId);
+        source.upstream.geometryId = geometryId;
+        data.sources.push(source);
+      });
+    },
+    process: async () => { tourApi.addExampleSource(); await tick(); run(); },
+    writeChat: () => { if (!assistantVisible) togglePanel('assistantVisible', true); chatDraft.set(EXAMPLE.prompt); },
+    openAnalysis: () => openAnalysis(),
+    chooseAnalysis: () => { tourApi.addExampleSource(); openAnalysis(); analysisDraft.set({ struct: EXAMPLE.struct, targets: [EXAMPLE.sourceId] }); }
+  };
+
+  function setTutorialLevel(level) {
+    tutorialLevel = level;
+    saveTutorial({ ...(loadTutorial() ?? {}), level });
+  }
+  function closeTutorial(finished) {
+    tutorial = null;
+    tourPrefill = false;
+    saveTutorial({ ...(loadTutorial() ?? {}), level: tutorialLevel, finished: finished || !!loadTutorial()?.finished });
+  }
+  function restartTutorial() {
+    if (dialog?.open) dialog.close();
+    tutorialKey++;
+    tutorial = 'welcome';
+  }
+
   async function menuAction(action) { menu = ''; await action(); }
   const menus = [
     ['Proyecto', [['Guardar configuración',save],['Recuperar configuración',() => dirty ? showDialog('restore') : restore()]]],
-    ['Datos', [['Ingresar coordenadas',() => openCoordinates()]]],
     ['Análisis', [['Procesar',run],['Mostrar resultados',() => chartId = currentSeries[0]?.id ?? null],['Análisis estadístico…',openAnalysis]]],
-    ['Visualización', [['Resolución gráfica',() => showDialog('chart-resolution')],['Alternar asistente',() => togglePanel('assistantVisible', !assistantVisible)]]],
-    ['Capas', [
-      ['Alternar fronteras', () => editVisual(visual => visual.map.layers.countries = !visual.map.layers.countries)],
-      ['Alternar selecciones', () => editVisual(visual => visual.map.layers.selection = !visual.map.layers.selection)]
-    ]],
+    ['Visualización', [['Resolución gráfica',() => showDialog('chart-resolution')]]],
     ['Exportar', [['Guardar gráfica…',openChartExport],['Descargar cfg_data.json',() => downloadJson('cfg_data.json',$workspace.data)],['Descargar cfg_visual.json',() => downloadJson('cfg_visual.json',$workspace.visual)]]]
   ];
 </script>
 
-<svelte:head><title>Earth Detective</title><meta name="description" content={$translate("Espacio de trabajo para explorar tendencias del sistema terrestre.")}/></svelte:head>
-<svelte:window onkeydown={event => {
+<svelte:head><title>TrendScope</title><meta name="description" content={$translate("Espacio de trabajo para explorar tendencias del sistema terrestre.")}/></svelte:head>
+<svelte:window onpointerdown={event => {
+  // Any click outside an open menu closes it.
+  if ((menu || selectionMenu) && !event.target?.closest?.('.menu-anchor')) { menu = ''; selectionMenu = false; }
+}} onkeydown={event => {
   if (tool === 'polygon' && vertices.length && !dialog?.open &&
       ['Enter', 'Escape'].includes(event.key) && !event.target?.closest?.('input, textarea, select, button, [contenteditable]')) {
     event.preventDefault();
@@ -369,11 +449,11 @@
 
 <div class="app-shell" class:light={$workspace.visual.theme === 'light'} style:--custom-accent={customAccent} style:--base-size={$workspace.visual.appearance.fontSize + 'px'}>
   <header class="topbar">
-    <div class="identity"><span class="brand-mark"><Aperture size={24} strokeWidth={1.7}/></span><strong>Earth Detective</strong></div>
+    <div class="identity"><strong>TrendScope</strong></div>
     <nav aria-label={$translate("Menú principal")}>
       {#each menus as [name,actions]}
         <div class="menu-anchor">
-          <button class:active={menu === name} aria-expanded={menu === name} onclick={() => menu = menu === name ? '' : name}>{$translate(name)}<ChevronDown size={12}/></button>
+          <button data-tour={'menu-' + name} class:active={menu === name} aria-expanded={menu === name} onclick={() => menu = menu === name ? '' : name}>{$translate(name)}<ChevronDown size={12}/></button>
           {#if menu === name}<div class="dropdown">{#each actions as [label,action]}<button disabled={label === 'Mostrar resultados' && !currentSeries.length} onclick={() => menuAction(action)}>{$translate(label)}</button>{/each}</div>{/if}
         </div>
       {/each}
@@ -412,14 +492,14 @@
       <button class="tool-button" class:active={mapVisible} aria-pressed={mapVisible}
         title={$translate('Alternar mapa')} aria-label={$translate('Alternar mapa')}
         onclick={() => togglePanel('map', !mapVisible)}><Earth size={17}/></button>
-      <button class="tool-button" class:active={settingsOpen} aria-pressed={settingsOpen} title={$translate("Configuración")} aria-label={$translate("Alternar panel de configuración")} onclick={() => { chartId = null; analysisView = false; settingsOpen = !settingsOpen; }}><Settings size={17}/></button>
+      <button class="tool-button" data-tour="settings-button" use:attend={'settings-button'} class:active={settingsOpen} aria-pressed={settingsOpen} title={$translate("Configuración")} aria-label={$translate("Alternar panel de configuración")} onclick={() => { chartId = null; analysisView = false; settingsOpen = !settingsOpen; }}><Settings size={17}/></button>
       <button class="tool-button" class:active={assistantVisible} aria-pressed={assistantVisible} title={$translate("Asistente de IA")} aria-label={$translate("Alternar asistente")} onclick={() => togglePanel('assistantVisible', !assistantVisible)}><Bot size={17}/></button>
-    </div>
-    <div class="view-tabs" role="group" aria-label={$translate('Vistas de la consulta')}>
-      <button class:active={!activeChart && !activeMap && !analysisVisible} aria-pressed={!activeChart && !activeMap && !analysisVisible} onclick={() => { chartId = null; analysisView = false; }}>{$translate('Espacio de trabajo')}</button>
-      <button class="tool-button" class:active={analysisVisible} aria-pressed={analysisVisible}
+      <button class="tool-button" data-tour="analysis-button" class:active={analysisVisible} aria-pressed={analysisVisible}
         title={$translate('Análisis estadístico')} aria-label={$translate('Análisis estadístico')}
         onclick={openAnalysis}><FlaskConical size={17}/></button>
+    </div>
+    <div class="view-tabs" data-tour="view-tabs" role="group" aria-label={$translate('Vistas de la consulta')}>
+      <button class:active={!activeChart && !activeMap && !analysisVisible} aria-pressed={!activeChart && !activeMap && !analysisVisible} onclick={() => { chartId = null; analysisView = false; }}>{$translate('Espacio de trabajo')}</button>
       {#if mapSeries.length}
         <button class:active={activeMap} aria-pressed={activeMap} onclick={() => chartId = mapTab}>{$translate(hasRegionalMaps ? 'Mapa coroplético' : 'Mapa de datos')}</button>
       {/if}
@@ -428,7 +508,7 @@
         <button class:active={activeChart?.id === item.id} aria-pressed={activeChart?.id === item.id} title={item.placeLabel ? item.placeLabel + ' · ' + label : label} onclick={() => chartId = item.id}><span>{item.placeLabel ?? label}{item.placeLabel && currentSeries.some(other => other.id !== item.id && other.placeLabel === item.placeLabel) ? ' · ' + label : ''}</span></button>
       {/each}
     </div>
-    <div class="run-actions">
+    <div class="run-actions" data-tour="process">
       {#if running}
         <button class="run" onclick={cancelRun} title={$translate('Cancelar la consulta en curso')}><Square size={13} fill="currentColor"/> {$translate('Cancelar')}</button>
       {:else}
@@ -450,7 +530,7 @@
       <Globe {tool} bind:vertices bind:cursor bind:notice showDetail={() => detailedMap = true}/>
     {/if}
     {#if assistantVisible && mapVisible}<ResizeHandle label={$translate('Ancho del asistente')} value={panels.assistantWidth ?? 388} min={265} max={600} direction={-1} resize={value => editVisual(visual => visual.workspace.assistantWidth = value)}/>{/if}
-    <aside class="assistant-panel" hidden={!assistantVisible}>
+    <aside class="assistant-panel" data-tour="assistant" hidden={!assistantVisible}>
       <header class="panel-heading"><span><Bot size={16}/> {$translate('Asistente de IA')}</span></header>
       <Assistant series={currentSeries} {running} {storageBusy} {buildInvestigation} {regionReset} onreset={clearChatResults} oncancel={cancelRun}
         acquisitionError={acquisitionError?.key === configKey ? acquisitionError.message : ''}
@@ -472,7 +552,7 @@
       <Results series={[selectedMap]} mapsOnly/>
     </div>
   {:else if activeChart}
-    <div class="chart-workspace"><Results series={[activeChart]}/></div>
+    <div class="chart-workspace"><Results series={[activeChart]} all={currentSeries}/></div>
   {/if}
   {#if analysisOpened}
     <!-- Kept mounted so the form survives switching to the map and back. -->
@@ -489,10 +569,18 @@
 
   {#if notice}<div class="toast" role="status"><CircleHelp size={17}/><span>{$translate(notice)}</span><button aria-label={$translate("Cerrar aviso")} class="icon-button" onclick={() => notice = ''}><X size={15}/></button></div>{/if}
 
+  {#if tutorial}
+    {#key tutorialKey}
+      <Tutorial phase={tutorial} level={tutorialLevel} appState={tourState} api={tourApi}
+        onlevel={setTutorialLevel} onstart={() => tutorial = 'tour'} onclose={closeTutorial}/>
+    {/key}
+  {/if}
+
   <dialog bind:this={dialog} aria-labelledby="dialog-title">
     <header><strong id="dialog-title">{$translate(modal === 'coordinates' ? 'Coordenadas WGS 84' : modal === 'restore' ? 'Recuperar configuración' : modal === 'chart-resolution' ? 'Resolución gráfica' : modal === 'chart-export' ? 'Guardar gráfica…' : 'Preferencias')}</strong><button class="icon-button" aria-label={$translate("Cerrar")} onclick={() => dialog.close()}><X size={17}/></button></header>
     {#if modal === 'coordinates'}
       <form onsubmit={submitCoordinates}>
+        {#if tourPrefill}<p class="quiet">Tutorial: ya cargamos las coordenadas de la ciudad de San Luis. Pulsá «Agregar selección».</p>{/if}
         <label>{$translate("Nombre del lugar")}<input maxlength="100" bind:value={selectionName}/></label>
         <label>{$translate("Geometría")}<select bind:value={coordinateMode}><option value="point">{$translate("Punto")}</option><option value="polygon">{$translate("Polígono")}</option></select></label>
         {#if coordinateMode === 'point'}
@@ -539,6 +627,10 @@
         <label>{$translate('Idioma')}<select value={$workspace.visual.language} onchange={event => editVisual(visual => visual.language = event.currentTarget.value)}><option value="es">Español</option><option value="en">English</option></select></label>
         <label>{$translate("Tema")}<select value={$workspace.visual.theme} onchange={event => editVisual(visual => visual.theme = event.currentTarget.value)}><option value="dark">{$translate("Oscuro")}</option><option value="light">{$translate("Claro")}</option></select></label>
         <label>{$translate("Tamaño del texto")}<select value={$workspace.visual.appearance.fontSize} onchange={event => editVisual(visual => visual.appearance.fontSize = Number(event.currentTarget.value))}><option value="12">{$translate("Compacto")}</option><option value="13">{$translate("Normal")}</option><option value="15">{$translate("Grande")}</option></select></label>
+        <label>Nivel de experiencia (tutorial)<select value={tutorialLevel} onchange={event => setTutorialLevel(event.currentTarget.value)}>
+          {#each LEVELS as [id, label] (id)}<option value={id}>{label}</option>{/each}
+        </select></label>
+        <button class="outlined" onclick={restartTutorial}>Ver el tutorial de nuevo</button>
         <label>{$translate("Color de acento")}<input type="color" value={customAccent ?? ($workspace.visual.theme === 'light' ? '#2563eb' : '#38bdf8')} oninput={event => editVisual(visual => visual.appearance.accent = event.currentTarget.value)}/></label>
       </div>
     {/if}

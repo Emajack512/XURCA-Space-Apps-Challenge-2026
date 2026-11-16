@@ -109,7 +109,8 @@ export function chartSpec(series, label, translate, resolution, width, light, wi
     },
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
-      scales: { x, y: { ...axis(series.unit), beginAtZero: true,
+      // grace: headroom above the highest value, so a 0–1 series does not touch the top border.
+      scales: { x, y: { ...axis(series.unit), beginAtZero: true, grace: '8%',
         ...(count ? { ticks: { ...axis(series.unit).ticks, precision: 0 } } : {}) } },
       plugins: {
         legend: { display: false },

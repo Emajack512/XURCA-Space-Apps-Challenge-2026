@@ -127,7 +127,7 @@ def prepare_question(body: PreparationRequest) -> dict | None:
     allowed = {item["id"] for item in source_options
                if isinstance(item, dict) and isinstance(item.get("id"), str)}
     prompt = (
-        "You prepare requests for Earth Detective. Reply only with JSON: "
+        "You prepare requests for TrendScope. Reply only with JSON: "
         '{"request":"standalone request in the requested language; max 900 characters","sourceIds":["catalog ID"]}. '
         "Read both sides of the chat, especially answers to clarifying questions. Correct typos. "
         "Reconstruct the latest request from explicit user choices and confirmed selections, including variable, all places, "
@@ -170,15 +170,22 @@ def analysis_catalog() -> list:
         for entry in capabilities()["analyses"]:
             if not entry["available"]:
                 continue
-            params = {}
+            # Kept short: the whole catalogue travels in every prompt and the worker caps prompts at 30 000 characters.
+            # Parameter types are omitted (the model only passes values the user gave); choices and REQUIRED stay.
+            params = []
             for name, spec in entry["params"].items():
                 if name in PREPARATION_PARAMS:
                     continue
-                text = spec["type"] + ("[" + "|".join(spec["choices"]) + "]" if spec["choices"] else "")
-                params[name] = text + (" REQUIRED" if spec["required"] else "")
-            items.append({"id": entry["struct_id"], "title": entry["title"],
-                          "variables": [entry["targets"]["min"], entry["targets"]["max"]],
-                          "params": params, "hypotheses": entry["hypotheses"]})
+                params.append(name + ("=" + "|".join(spec["choices"]) if spec["choices"] else "")
+                              + (" REQUIRED" if spec["required"] else ""))
+            low, high = entry["targets"]["min"], entry["targets"]["max"]
+            item = {"id": entry["struct_id"], "title": entry["title"],
+                    "variables": str(low) if low == high else f"{low}-{high}"}
+            if params:
+                item["params"] = params
+            if entry["hypotheses"]:
+                item["hypotheses"] = entry["hypotheses"]
+            items.append(item)
         return items
     except Exception:  # the chat keeps working without analyses
         return []
@@ -297,6 +304,14 @@ def interpret(body: AssistantQuestion) -> dict:
                 else:
                     entries.pop(0)
                 prompt = build_prompt()
+        # Last resorts before failing: the display settings and the draft interpretation are optional.
+        current = context.get("current")
+        if len(prompt) > PROMPT_LIMIT and isinstance(current, dict) and "visual" in current:
+            del current["visual"]
+            prompt = build_prompt()
+    if len(prompt) > PROMPT_LIMIT and "prepared_request" in request:
+        del request["prepared_request"]
+        prompt = build_prompt()
     if len(prompt) > PROMPT_LIMIT:
         raise ValueError("La consulta es demasiado grande para el asistente. Reducí las variables o la conversación.")
     payload = {"prompt": prompt}

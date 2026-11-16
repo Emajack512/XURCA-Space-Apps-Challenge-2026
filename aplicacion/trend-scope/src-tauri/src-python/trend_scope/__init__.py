@@ -1,4 +1,4 @@
-"""Earth Detective scientific services and desktop entry point."""
+"""TrendScope scientific services and desktop entry point."""
 
 
 def main() -> int:

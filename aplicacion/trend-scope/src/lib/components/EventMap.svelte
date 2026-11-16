@@ -340,7 +340,6 @@
     <input type="range" min="0" max={windows.length - 1} value={frame} disabled={windows.length < 2}
       oninput={event => { frame = Number(event.currentTarget.value); selected = null; }}/>
   </label>
-  {#if !events.length}<p class="quiet">{$translate(earthquake ? 'Sin sismos registrados en esta ventana' : fire ? 'Sin focos detectados en esta ventana' : 'No hay datos para esta ventana')}</p>{/if}
   {#if layer.stationSurface && snapshot}
     <p class="quiet">
       {snapshot.date} · {events.length} {$translate('estaciones con mediciones ese día')}.
@@ -358,8 +357,6 @@
         {/each}
       </ul>
     </details>
-  {:else if layer.kind === 'entities' && !layer.stationSurface && precision < 10}
-    <p class="quiet">{$translate('Última medición disponible por entidad en cada ventana.')}</p>
   {/if}
   {#if selected}
     <p role="status">{eventLabel(selected)}

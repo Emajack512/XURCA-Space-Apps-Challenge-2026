@@ -45,6 +45,14 @@ Proyecto: **Earth Detective / XURCA** (NASA Space Apps 2026). App de escritorio 
   2. **Open-Meteo:** la cuota gratuita (600/min, 5 000/hora) es **por IP**; testers en la misma red la comparten y la agotan. Al cierre de esta sesión seguía en HTTP 429: `grid_fire_weather` y `precipitation_indices` no están verificados con datos reales (correr `python -m trend_scope.raster.manual_check` cuando se libere). Para el test, preferir NASA POWER.
   3. **Mapas sin dibujar:** los análisis `grid_*` devuelven `block["grids"]`, pero ningún componente los dibuja todavía (es de JP). Alternativa en el carril de Ema: un mapa de calor simple dentro de `AnalysisPanel.svelte`.
 
+## Pruebas de usuarios y «Superprompt» (2026-11-15, noche)
+
+- **Nombre:** la app se llama **TrendScope** en toda la interfaz y en el título de la ventana (antes «Earth Detective»); `identifier` sigue igual. Los `User-Agent` de red siguen como `EarthDetective/…` (el servidor del asistente podría filtrarlos).
+- **Límite del asistente:** el servidor acepta ≤ 30 000 caracteres por mensaje (`PROMPT_LIMIT` 29 500). Instrucciones + esquema + catálogo ocupan ~25 000: **no agregar texto al contrato sin medir** (la pregunta de 1 200 caracteres queda con ~120 de margen). `analysis_catalog()` va compacto (sin tipos de parámetros) y, si no entra, se descartan `current.visual` y `prepared_request`.
+- **Chat:** ya no consulta datos solo (botón «Consultar estos datos»); un lugar nuevo reemplaza al anterior salvo «también/además»; recorta el período a la cobertura de la fuente; los errores de la app se muestran como «Motivo: …».
+- **Interfaz:** tutorial guiado por niveles (`Tutorial.svelte`, `services/tutorialSteps.js`, nivel en localStorage, Preferencias → «Ver el tutorial de nuevo»; ejemplo: regresión de la temperatura mensual de San Luis 2024–2025); aviso rojo + pitido en el dato que falta (`services/attention.js`, `use:attend`); resumen en palabras debajo de la gráfica (`services/resultSummary.js`); menú de selecciones (borrado individual, unir puntos); botones Cancelar; polígonos que se cruzan o muy angostos se rechazan (`geography.regionProblem`).
+- **Instalador:** verificado en entorno limpio (sin Python ni venv, PATH mínimo): el Python embebido carga todas las dependencias, consulta HTTPS y la app arranca. El exe solo importa DLL de Windows + `python313.dll` (incluida). `tauri.bundle.json` incluye el instalador de WebView2. `scripts/windows/build.ps1` funciona sin `uv` ni `pnpm`.
+
 ## Fronteras con JP (detalle completo en `AGENTS.md` de la raíz, sección «Fronteras de trabajo»)
 
 - **Lado de Ema (este agente):** `PY/handlers/`, `PY/models/`, `AnalysisPanel.svelte`, `ForecastChart.svelte`, `analysisText.js`, `docs/plan-maestro/schemas/`.
